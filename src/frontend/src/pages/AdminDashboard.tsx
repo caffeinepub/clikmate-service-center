@@ -2750,24 +2750,34 @@ function AdminInitScreen({
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [useMasterKey, setUseMasterKey] = useState(false);
 
   async function handleClaim() {
     if (!actor) return;
     setLoading(true);
     setError("");
     try {
-      await (actor as unknown as any)._initializeAccessControlWithSecret(token);
-      onSuccess();
+      if (useMasterKey) {
+        const ok = await (actor as unknown as any).claimAdminWithMasterKey(
+          token,
+        );
+        if (ok) {
+          onSuccess();
+        } else {
+          setError("Master key galat hai ya admin already assign hai.");
+        }
+      } else {
+        await (actor as unknown as any)._initializeAccessControlWithSecret(
+          token,
+        );
+        onSuccess();
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("already")) {
-        setError(
-          "Admin ya toh already assign hai ya token galat hai. Sahi admin token enter karein.",
-        );
+        setError("Admin ya toh already assign hai ya token galat hai.");
       } else {
-        setError(
-          "Token galat hai ya access denied. Caffeine project settings se Admin Token check karein.",
-        );
+        setError("Token galat hai ya access denied.");
       }
     } finally {
       setLoading(false);
@@ -2823,10 +2833,52 @@ function AdminInitScreen({
             lineHeight: 1.6,
           }}
         >
-          Aapki identity admin ke roop mein register nahi hai. Pehli baar admin
-          claim karne ke liye Caffeine project settings se Admin Token enter
-          karein.
+          Pehli baar admin claim karne ke liye neeche dono options mein se ek
+          choose karein.
         </p>
+        {/* Toggle */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <button
+            type="button"
+            onClick={() => {
+              setUseMasterKey(false);
+              setToken("");
+              setError("");
+            }}
+            style={{
+              flex: 1,
+              padding: "8px",
+              borderRadius: 8,
+              fontSize: 12,
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: !useMasterKey ? "#7c3aed" : "transparent",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            Caffeine Token
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setUseMasterKey(true);
+              setToken("");
+              setError("");
+            }}
+            style={{
+              flex: 1,
+              padding: "8px",
+              borderRadius: 8,
+              fontSize: 12,
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: useMasterKey ? "#7c3aed" : "transparent",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            Master Key
+          </button>
+        </div>
         <div style={{ textAlign: "left", marginBottom: 16 }}>
           <label
             htmlFor="admin-token-input"
@@ -2837,12 +2889,16 @@ function AdminInitScreen({
               marginBottom: 6,
             }}
           >
-            Admin Token
+            {useMasterKey ? "Master Key" : "Admin Token"}
           </label>
           <input
             id="admin-token-input"
             type="password"
-            placeholder="Caffeine Admin Token paste karein..."
+            placeholder={
+              useMasterKey
+                ? "Master key enter karein..."
+                : "Caffeine Admin Token paste karein..."
+            }
             value={token}
             onChange={(e) => setToken(e.target.value)}
             style={{
