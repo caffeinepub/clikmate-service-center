@@ -50,6 +50,18 @@ export interface Inquiry {
   'message' : string,
   'phone' : string,
 }
+export interface MaskedShopOrder {
+  'id' : bigint,
+  'customerName' : string,
+  'status' : string,
+  'deliveryAddress' : string,
+  'paymentMethod' : string,
+  'createdAt' : bigint,
+  'deliveryMethod' : string,
+  'totalAmount' : number,
+  'phone' : string,
+  'items' : Array<ShopOrderItem>,
+}
 export interface OrderRecord {
   'id' : bigint,
   'status' : string,
@@ -61,6 +73,7 @@ export interface OrderRecord {
   'phone' : string,
   'fileUrl' : string,
 }
+export interface Rider { 'pin' : string, 'name' : string, 'mobile' : string }
 export interface ServiceOrder {
   'files' : Array<ExternalBlob>,
   'serviceType' : string,
@@ -74,6 +87,7 @@ export interface ShopOrder {
   'status' : string,
   'deliveryAddress' : string,
   'paymentMethod' : string,
+  'deliveryOtp' : string,
   'createdAt' : bigint,
   'deliveryMethod' : string,
   'totalAmount' : number,
@@ -125,6 +139,7 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addCatalogItem' : ActorMethod<[CatalogItemInput], bigint>,
+  'addRider' : ActorMethod<[string, string, string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'deleteCatalogItem' : ActorMethod<[bigint], undefined>,
   'filterOrders' : ActorMethod<[FilterOrders], Array<OrderRecord>>,
@@ -143,13 +158,21 @@ export interface _SERVICE {
   'getMyShopOrders' : ActorMethod<[string], Array<ShopOrder>>,
   'getOrdersByPhone' : ActorMethod<[string], Array<OrderRecord>>,
   'getPublishedCatalogItems' : ActorMethod<[], Array<CatalogItem>>,
+  'getReadyForDeliveryOrders' : ActorMethod<[], Array<MaskedShopOrder>>,
+  'getRiders' : ActorMethod<[], Array<Rider>>,
   'getUpiSettings' : ActorMethod<[], [] | [UpiSettings]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'markOrderDelivered' : ActorMethod<[bigint, string], ShopOrder>,
   'placeShopOrder' : ActorMethod<
     [string, string, string, string, string, Array<ShopOrderItem>, number],
     ShopOrder
   >,
+  'placeShopOrderWithOTP' : ActorMethod<
+    [string, string, string, string, string, Array<ShopOrderItem>, number],
+    ShopOrder
+  >,
+  'removeRider' : ActorMethod<[string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'saveCustomerProfile' : ActorMethod<[string, string, string], undefined>,
   'setBusinessInfo' : ActorMethod<[BusinessInfo], undefined>,
@@ -162,6 +185,7 @@ export interface _SERVICE {
   'updateOrderStatus' : ActorMethod<[bigint, string], undefined>,
   'updateShopOrderStatus' : ActorMethod<[bigint, string], undefined>,
   'verifyOtp' : ActorMethod<[string, string], boolean>,
+  'verifyRider' : ActorMethod<[string, string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

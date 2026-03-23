@@ -55,6 +55,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import CheckoutPage from "./pages/CheckoutPage";
 import ItemDetailPage from "./pages/ItemDetailPage";
 import OrderSuccessPage from "./pages/OrderSuccessPage";
+import RiderDashboard from "./pages/RiderDashboard";
 
 function smoothScroll(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -1347,6 +1348,7 @@ export default function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/item/:id" element={<ItemDetailPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/rider" element={<RiderDashboard />} />
           <Route
             path="/order-success/:orderId"
             element={<OrderSuccessPage />}

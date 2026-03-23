@@ -43,6 +43,7 @@ import {
   Shield,
   Trash2,
   Upload,
+  Users,
   X,
   Zap,
 } from "lucide-react";
@@ -82,7 +83,8 @@ type NavSection =
   | "orders"
   | "active-orders"
   | "order-history"
-  | "settings";
+  | "settings"
+  | "team";
 
 interface MediaFile {
   id: string;
@@ -1939,16 +1941,23 @@ const SHOP_ORDER_STATUSES = [
   "Pending",
   "Printing",
   "Ready for Pickup",
+  "Ready for Delivery",
   "Delivered",
   "Cancelled",
 ];
-const ACTIVE_STATUSES = ["Pending", "Printing", "Ready for Pickup"];
+const ACTIVE_STATUSES = [
+  "Pending",
+  "Printing",
+  "Ready for Pickup",
+  "Ready for Delivery",
+];
 
 function ShopOrderStatusBadge({ status }: { status: string }) {
   const colorMap: Record<string, { bg: string; color: string }> = {
     Pending: { bg: "rgba(234,179,8,0.2)", color: "#fbbf24" },
     Printing: { bg: "rgba(59,130,246,0.2)", color: "#60a5fa" },
     "Ready for Pickup": { bg: "rgba(16,185,129,0.2)", color: "#34d399" },
+    "Ready for Delivery": { bg: "rgba(99,102,241,0.2)", color: "#818cf8" },
     Delivered: { bg: "rgba(139,92,246,0.2)", color: "#a78bfa" },
     Cancelled: { bg: "rgba(239,68,68,0.2)", color: "#f87171" },
   };
@@ -2747,9 +2756,7 @@ function AdminInitScreen({
     setLoading(true);
     setError("");
     try {
-      await (
-        actor as unknown as backendInterface
-      )._initializeAccessControlWithSecret(token);
+      await (actor as unknown as any)._initializeAccessControlWithSecret(token);
       onSuccess();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -2897,6 +2904,351 @@ function AdminInitScreen({
   );
 }
 
+// ─── Team & Access Section ────────────────────────────────────────────────────
+
+function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
+  const [riders, setRiders] = useState<
+    Array<{ name: string; mobile: string; pin: string }>
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [pin, setPin] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  async function loadRiders() {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const list = await (actor as unknown as backendInterface).getRiders();
+      setRiders(list);
+    } catch {
+      toast.error("Failed to load riders.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadRiders is stable
+  useEffect(() => {
+    loadRiders();
+  }, [actor]);
+
+  async function handleAddRider() {
+    if (!actor) return;
+    if (!name.trim() || mobile.length !== 10 || pin.length !== 4) {
+      toast.error("Please fill all fields correctly.");
+      return;
+    }
+    setAdding(true);
+    try {
+      await (actor as unknown as backendInterface).addRider(
+        name.trim(),
+        mobile,
+        pin,
+      );
+      toast.success("Rider added successfully.");
+      setName("");
+      setMobile("");
+      setPin("");
+      await loadRiders();
+    } catch {
+      toast.error("Failed to add rider.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleRemoveRider(riderMobile: string) {
+    if (!actor) return;
+    setRemoving(riderMobile);
+    try {
+      await (actor as unknown as backendInterface).removeRider(riderMobile);
+      toast.success("Rider removed.");
+      await loadRiders();
+    } catch {
+      toast.error("Failed to remove rider.");
+    } finally {
+      setRemoving(null);
+    }
+  }
+
+  return (
+    <div style={{ padding: "24px", maxWidth: 700 }}>
+      <h2
+        style={{
+          color: "#f1f5f9",
+          fontSize: 22,
+          fontWeight: 700,
+          marginBottom: 6,
+        }}
+      >
+        Team & Access
+      </h2>
+      <p style={{ color: "#94a3b8", fontSize: 14, marginBottom: 24 }}>
+        Manage delivery rider accounts. Riders log in at /#/rider with their
+        mobile + PIN.
+      </p>
+
+      {/* Add Rider Form */}
+      <div
+        style={{
+          background: "#1e293b",
+          borderRadius: 12,
+          padding: 20,
+          marginBottom: 24,
+          border: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        <h3
+          style={{
+            color: "#f59e0b",
+            fontSize: 15,
+            fontWeight: 600,
+            marginBottom: 16,
+          }}
+        >
+          Add New Rider
+        </h3>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 12,
+          }}
+        >
+          <div>
+            <Label
+              style={{
+                color: "#cbd5e1",
+                fontSize: 12,
+                marginBottom: 6,
+                display: "block",
+              }}
+            >
+              Full Name
+            </Label>
+            <Input
+              data-ocid="admin.team.name.input"
+              placeholder="Rider name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              style={{
+                background: "#0f172a",
+                border: "1px solid #334155",
+                color: "#f1f5f9",
+              }}
+            />
+          </div>
+          <div>
+            <Label
+              style={{
+                color: "#cbd5e1",
+                fontSize: 12,
+                marginBottom: 6,
+                display: "block",
+              }}
+            >
+              Mobile Number
+            </Label>
+            <Input
+              data-ocid="admin.team.mobile.input"
+              placeholder="10-digit mobile"
+              maxLength={10}
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
+              style={{
+                background: "#0f172a",
+                border: "1px solid #334155",
+                color: "#f1f5f9",
+              }}
+            />
+          </div>
+          <div>
+            <Label
+              style={{
+                color: "#cbd5e1",
+                fontSize: 12,
+                marginBottom: 6,
+                display: "block",
+              }}
+            >
+              4-Digit PIN
+            </Label>
+            <Input
+              data-ocid="admin.team.pin.input"
+              type="password"
+              placeholder="PIN"
+              maxLength={4}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+              style={{
+                background: "#0f172a",
+                border: "1px solid #334155",
+                color: "#f1f5f9",
+              }}
+            />
+          </div>
+        </div>
+        <Button
+          data-ocid="admin.team.add.primary_button"
+          onClick={handleAddRider}
+          disabled={adding}
+          style={{
+            marginTop: 16,
+            background: "#f59e0b",
+            color: "#0f172a",
+            fontWeight: 700,
+            border: 0,
+          }}
+        >
+          {adding ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Adding...
+            </>
+          ) : (
+            <>
+              <Users className="w-4 h-4 mr-2" />
+              Add Rider
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* Riders Table */}
+      <div
+        style={{
+          background: "#1e293b",
+          borderRadius: 12,
+          overflow: "hidden",
+          border: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        <div
+          style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <h3 style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 600 }}>
+            Current Riders ({riders.length})
+          </h3>
+        </div>
+        {loading ? (
+          <div
+            data-ocid="admin.team.loading_state"
+            style={{ padding: 40, textAlign: "center" }}
+          >
+            <Loader2
+              className="w-8 h-8 animate-spin mx-auto mb-2"
+              style={{ color: "#f59e0b" }}
+            />
+            <p style={{ color: "#64748b", fontSize: 13 }}>Loading riders...</p>
+          </div>
+        ) : riders.length === 0 ? (
+          <div
+            data-ocid="admin.team.empty_state"
+            style={{ padding: 40, textAlign: "center" }}
+          >
+            <Users
+              style={{
+                width: 40,
+                height: 40,
+                color: "#334155",
+                margin: "0 auto 12px",
+              }}
+            />
+            <p style={{ color: "#64748b", fontSize: 14 }}>
+              No riders added yet.
+            </p>
+          </div>
+        ) : (
+          <table
+            style={{ width: "100%", borderCollapse: "collapse" }}
+            data-ocid="admin.team.table"
+          >
+            <thead>
+              <tr style={{ background: "rgba(255,255,255,0.03)" }}>
+                {["Name", "Mobile", "PIN", "Action"].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "10px 20px",
+                      textAlign: "left",
+                      color: "#64748b",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {riders.map((rider, idx) => (
+                <tr
+                  key={rider.mobile}
+                  data-ocid={`admin.team.row.${idx + 1}`}
+                  style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+                >
+                  <td
+                    style={{
+                      padding: "12px 20px",
+                      color: "#f1f5f9",
+                      fontSize: 14,
+                    }}
+                  >
+                    {rider.name}
+                  </td>
+                  <td
+                    style={{
+                      padding: "12px 20px",
+                      color: "#94a3b8",
+                      fontSize: 14,
+                    }}
+                  >
+                    {rider.mobile}
+                  </td>
+                  <td
+                    style={{
+                      padding: "12px 20px",
+                      color: "#64748b",
+                      fontSize: 14,
+                    }}
+                  >
+                    ****
+                  </td>
+                  <td style={{ padding: "12px 20px" }}>
+                    <Button
+                      data-ocid={`admin.team.delete_button.${idx + 1}`}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveRider(rider.mobile)}
+                      disabled={removing === rider.mobile}
+                      style={{ color: "#f87171", fontSize: 12 }}
+                    >
+                      {removing === rider.mobile ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        "Remove"
+                      )}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
@@ -2951,6 +3303,7 @@ export default function AdminDashboard() {
     "active-orders": "Active Orders",
     "order-history": "Order History",
     settings: "Settings",
+    team: "Team & Access",
   };
 
   // ── View 1: Not logged in ──────────────────────────────────────────────────
@@ -3340,6 +3693,16 @@ export default function AdminDashboard() {
               setSidebarOpen(false);
             }}
           />
+          <NavItem
+            icon={Users}
+            label="Team & Access"
+            active={activeSection === "team"}
+            ocid="admin.team.tab"
+            onClick={() => {
+              setActiveSection("team");
+              setSidebarOpen(false);
+            }}
+          />
         </div>
 
         {/* User + Logout */}
@@ -3526,6 +3889,9 @@ export default function AdminDashboard() {
           )}
           {activeSection === "settings" && (
             <SettingsSection actor={actor as unknown as backendInterface} />
+          )}
+          {activeSection === "team" && (
+            <TeamAccessSection actor={actor as unknown as backendInterface} />
           )}
         </main>
       </div>

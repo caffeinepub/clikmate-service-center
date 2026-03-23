@@ -14,15 +14,30 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
-export interface UserProfile {
-    customerName?: string;
-    deliveryAddress?: string;
-    name: string;
-    phone: string;
-}
 export interface UpiSettings {
     upiId: string;
     qrCodeUrl: string;
+}
+export interface CatalogItemInput {
+    stockStatus: string;
+    name: string;
+    description: string;
+    category: string;
+    price: string;
+    mediaFiles: Array<ExternalBlob>;
+    mediaTypes: Array<string>;
+}
+export interface MaskedShopOrder {
+    id: bigint;
+    customerName: string;
+    status: string;
+    deliveryAddress: string;
+    paymentMethod: string;
+    createdAt: bigint;
+    deliveryMethod: string;
+    totalAmount: number;
+    phone: string;
+    items: Array<ShopOrderItem>;
 }
 export interface ShopOrder {
     id: bigint;
@@ -30,6 +45,7 @@ export interface ShopOrder {
     status: string;
     deliveryAddress: string;
     paymentMethod: string;
+    deliveryOtp: string;
     createdAt: bigint;
     deliveryMethod: string;
     totalAmount: number;
@@ -46,6 +62,11 @@ export interface OrderRecord {
     uploadedFiles: Array<ExternalBlob>;
     phone: string;
     fileUrl: string;
+}
+export interface Rider {
+    pin: string;
+    name: string;
+    mobile: string;
 }
 export interface FilterOrders {
     status?: string;
@@ -90,14 +111,11 @@ export interface CatalogItem {
     mediaFiles: Array<ExternalBlob>;
     mediaTypes: Array<string>;
 }
-export interface CatalogItemInput {
-    stockStatus: string;
+export interface UserProfile {
+    customerName?: string;
+    deliveryAddress?: string;
     name: string;
-    description: string;
-    category: string;
-    price: string;
-    mediaFiles: Array<ExternalBlob>;
-    mediaTypes: Array<string>;
+    phone: string;
 }
 export enum UserRole {
     admin = "admin",
@@ -105,8 +123,8 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
-    _initializeAccessControlWithSecret(token: string): Promise<void>;
     addCatalogItem(input: CatalogItemInput): Promise<bigint>;
+    addRider(name: string, mobile: string, pin: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     deleteCatalogItem(id: bigint): Promise<void>;
     filterOrders(filters: FilterOrders): Promise<Array<OrderRecord>>;
@@ -125,10 +143,15 @@ export interface backendInterface {
     getMyShopOrders(phone: string): Promise<Array<ShopOrder>>;
     getOrdersByPhone(phone: string): Promise<Array<OrderRecord>>;
     getPublishedCatalogItems(): Promise<Array<CatalogItem>>;
+    getReadyForDeliveryOrders(): Promise<Array<MaskedShopOrder>>;
+    getRiders(): Promise<Array<Rider>>;
     getUpiSettings(): Promise<UpiSettings | null>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
+    markOrderDelivered(orderId: bigint, otp: string): Promise<ShopOrder>;
     placeShopOrder(phone: string, customerName: string, deliveryMethod: string, deliveryAddress: string, paymentMethod: string, items: Array<ShopOrderItem>, totalAmount: number): Promise<ShopOrder>;
+    placeShopOrderWithOTP(phone: string, customerName: string, deliveryMethod: string, deliveryAddress: string, paymentMethod: string, items: Array<ShopOrderItem>, totalAmount: number): Promise<ShopOrder>;
+    removeRider(mobile: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     saveCustomerProfile(phone: string, customerName: string, deliveryAddress: string): Promise<void>;
     setBusinessInfo(ownInfo: BusinessInfo): Promise<void>;
@@ -141,4 +164,5 @@ export interface backendInterface {
     updateOrderStatus(id: bigint, status: string): Promise<void>;
     updateShopOrderStatus(orderId: bigint, status: string): Promise<void>;
     verifyOtp(phone: string, code: string): Promise<boolean>;
+    verifyRider(mobile: string, pin: string): Promise<boolean>;
 }

@@ -7,14 +7,16 @@ import Iter "mo:core/Iter";
 import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
 import Time "mo:core/Time";
-
+import Char "mo:core/Char";
+import Random "mo:core/Random";
 
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
+import Migration "migration"; // import migration module
 
-
+(with migration = Migration.run)
 actor {
   // Initialize the access control system
   let accessControlState = AccessControl.initState();
@@ -145,6 +147,21 @@ actor {
     totalAmount : Float;
     status : Text;
     createdAt : Int;
+    deliveryOtp : Text; // field added
+  };
+
+  // Masked order type for public visibility.
+  public type MaskedShopOrder = {
+    id : Nat;
+    phone : Text;
+    customerName : Text;
+    deliveryMethod : Text;
+    deliveryAddress : Text;
+    paymentMethod : Text;
+    items : [ShopOrderItem];
+    totalAmount : Float;
+    status : Text;
+    createdAt : Int;
   };
 
   public type UpiSettings = {
@@ -158,6 +175,15 @@ actor {
 
   // Customer profiles (phone -> {customerName, deliveryAddress})
   let customerProfiles = Map.empty<Text, { customerName : Text; deliveryAddress : Text }>();
+
+  // Rider type and store
+  public type Rider = {
+    name : Text;
+    mobile : Text;
+    pin : Text;
+  };
+
+  let riders = Map.empty<Text, Rider>();
 
   // User Profile Functions
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
@@ -218,9 +244,9 @@ actor {
   // OTP Functions (Public - no auth needed, guests can use)
   public shared func generateOtp(phone : Text) : async Text {
     // Simulate 6-digit OTP
-    let otp = "123456"; // Replace with real random generation in prod
-    otpStore.add(phone, otp);
-    otp;
+    let simulatedOtp = "123456"; // Replace with real random generation in prod
+    otpStore.add(phone, simulatedOtp);
+    simulatedOtp;
   };
 
   public shared func verifyOtp(phone : Text, code : Text) : async Bool {
@@ -460,6 +486,7 @@ actor {
       totalAmount;
       status = "Pending";
       createdAt = Time.now();
+      deliveryOtp = "";
     };
     shopOrders.add(id, order);
     nextShopOrderId += 1;
@@ -508,10 +535,121 @@ actor {
     switch (shopOrders.get(orderId)) {
       case (null) { Runtime.trap("Shop order not found") };
       case (?order) {
-        let updatedOrder = { order with status };
-        shopOrders.add(orderId, updatedOrder);
+        if (status == "Ready for Delivery" and order.deliveryOtp == "") {
+          let newOtp = await generateRandomOtp();
+          let updatedOrder = { order with status; deliveryOtp = newOtp };
+          shopOrders.add(orderId, updatedOrder);
+        } else {
+          let updatedOrder = { order with status };
+          shopOrders.add(orderId, updatedOrder);
+        };
       };
     };
+  };
+
+  // Place Shop Order (Public - guests can place orders)
+  public shared ({ caller }) func placeShopOrderWithOTP(phone : Text, customerName : Text, deliveryMethod : Text, deliveryAddress : Text, paymentMethod : Text, items : [ShopOrderItem], totalAmount : Float) : async ShopOrder {
+    let id = nextShopOrderId;
+    let order : ShopOrder = {
+      id;
+      phone;
+      customerName;
+      deliveryMethod;
+      deliveryAddress;
+      paymentMethod;
+      items;
+      totalAmount;
+      status = "Pending";
+      createdAt = Time.now();
+      deliveryOtp = "";
+    };
+    shopOrders.add(id, order);
+    nextShopOrderId += 1;
+    order;
+  };
+
+  func maskShopOrder(order : ShopOrder) : MaskedShopOrder {
+    {
+      id = order.id;
+      phone = order.phone;
+      customerName = order.customerName;
+      deliveryMethod = order.deliveryMethod;
+      deliveryAddress = order.deliveryAddress;
+      paymentMethod = order.paymentMethod;
+      items = order.items;
+      totalAmount = order.totalAmount;
+      status = order.status;
+      createdAt = order.createdAt;
+    };
+  };
+
+  // ─── New Rider Delivery Features ─────────────────────────────────────────
+
+  // Public get ready for delivery orders
+  public query func getReadyForDeliveryOrders() : async [MaskedShopOrder] {
+    shopOrders.values().toArray().filter(func(o) { o.status == "Ready for Delivery" }).map(func(o) { maskShopOrder(o) });
+  };
+
+  // Public mark order delivered using OTP
+  public shared func markOrderDelivered(orderId : Nat, otp : Text) : async ShopOrder {
+    switch (shopOrders.get(orderId)) {
+      case (null) { Runtime.trap("Order not found") };
+      case (?order) {
+        if (order.status != "Ready for Delivery") {
+          Runtime.trap("Order not ready for delivery");
+        };
+        if (order.deliveryOtp != otp) {
+          Runtime.trap("Invalid OTP");
+        };
+        let updatedOrder = { order with status = "Delivered" };
+        shopOrders.add(orderId, updatedOrder);
+        updatedOrder;
+      };
+    };
+  };
+
+  // ─── Rider Management (Admin only methods) ──────────────────────────────
+
+  // Admin only - Add rider
+  public shared ({ caller }) func addRider(name : Text, mobile : Text, pin : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add riders");
+    };
+    let rider : Rider = {
+      name;
+      mobile;
+      pin;
+    };
+    riders.add(mobile, rider);
+  };
+
+  // Admin only - Remove rider
+  public shared ({ caller }) func removeRider(mobile : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can remove riders");
+    };
+    riders.remove(mobile);
+  };
+
+  // Admin only - Get all riders
+  public query ({ caller }) func getRiders() : async [Rider] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view riders");
+    };
+    riders.values().toArray();
+  };
+
+  // Public - Verify rider credentials (mobile + pin)
+  public query func verifyRider(mobile : Text, pin : Text) : async Bool {
+    switch (riders.get(mobile)) {
+      case (null) { false };
+      case (?rider) { rider.pin == pin };
+    };
+  };
+
+  // Helper function to generate a 4-digit OTP as Text
+  func generateRandomOtp() : async Text {
+    (await Random.natRange(1000, 10000)).toText();
   };
 
   // Get UPI Settings (Public)
