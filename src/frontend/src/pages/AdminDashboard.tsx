@@ -2741,46 +2741,19 @@ function SettingsSection({ actor }: { actor: backendInterface | null }) {
 
 // ─── Admin Init Screen ───────────────────────────────────────────────────────
 function AdminInitScreen({
-  actor,
   onSuccess,
 }: {
-  actor: ReturnType<typeof import("@/hooks/useActor").useActor>["actor"];
   onSuccess: () => void;
 }) {
   const [token, setToken] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [useMasterKey, setUseMasterKey] = useState(false);
 
-  async function handleClaim() {
-    if (!actor) return;
-    setLoading(true);
-    setError("");
-    try {
-      if (useMasterKey) {
-        const ok = await (actor as unknown as any).claimAdminWithMasterKey(
-          token,
-        );
-        if (ok) {
-          onSuccess();
-        } else {
-          setError("Master key galat hai ya admin already assign hai.");
-        }
-      } else {
-        await (actor as unknown as any)._initializeAccessControlWithSecret(
-          token,
-        );
-        onSuccess();
-      }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes("already")) {
-        setError("Admin ya toh already assign hai ya token galat hai.");
-      } else {
-        setError("Token galat hai ya access denied.");
-      }
-    } finally {
-      setLoading(false);
+  function handleClaim() {
+    if (token === "CLIKMATE-ADMIN-2024") {
+      localStorage.setItem("clikmate_admin_auth", "1");
+      onSuccess();
+    } else {
+      setError("Password galat hai. Dobara try karein.");
     }
   }
 
@@ -2823,7 +2796,7 @@ function AdminInitScreen({
             marginBottom: 8,
           }}
         >
-          Admin Setup Required
+          Admin Login
         </h2>
         <p
           style={{
@@ -2833,52 +2806,8 @@ function AdminInitScreen({
             lineHeight: 1.6,
           }}
         >
-          Pehli baar admin claim karne ke liye neeche dono options mein se ek
-          choose karein.
+          Admin password enter karein dashboard access ke liye.
         </p>
-        {/* Toggle */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <button
-            type="button"
-            onClick={() => {
-              setUseMasterKey(false);
-              setToken("");
-              setError("");
-            }}
-            style={{
-              flex: 1,
-              padding: "8px",
-              borderRadius: 8,
-              fontSize: 12,
-              border: "1px solid rgba(255,255,255,0.15)",
-              background: !useMasterKey ? "#7c3aed" : "transparent",
-              color: "white",
-              cursor: "pointer",
-            }}
-          >
-            Caffeine Token
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setUseMasterKey(true);
-              setToken("");
-              setError("");
-            }}
-            style={{
-              flex: 1,
-              padding: "8px",
-              borderRadius: 8,
-              fontSize: 12,
-              border: "1px solid rgba(255,255,255,0.15)",
-              background: useMasterKey ? "#7c3aed" : "transparent",
-              color: "white",
-              cursor: "pointer",
-            }}
-          >
-            Master Key
-          </button>
-        </div>
         <div style={{ textAlign: "left", marginBottom: 16 }}>
           <label
             htmlFor="admin-token-input"
@@ -2889,18 +2818,15 @@ function AdminInitScreen({
               marginBottom: 6,
             }}
           >
-            {useMasterKey ? "Master Key" : "Admin Token"}
+            Admin Password
           </label>
           <input
             id="admin-token-input"
             type="password"
-            placeholder={
-              useMasterKey
-                ? "Master key enter karein..."
-                : "Caffeine Admin Token paste karein..."
-            }
+            placeholder="Password enter karein..."
             value={token}
             onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleClaim()}
             style={{
               width: "100%",
               padding: "10px 14px",
@@ -2922,22 +2848,22 @@ function AdminInitScreen({
         <button
           type="button"
           onClick={handleClaim}
-          disabled={loading || !token}
+          disabled={!token}
           data-ocid="admin.init.claim_button"
           style={{
             width: "100%",
             padding: "12px",
             borderRadius: 10,
             border: "none",
-            background: loading || !token ? "#374151" : "#7c3aed",
+            background: !token ? "#374151" : "#7c3aed",
             color: "white",
-            cursor: loading || !token ? "not-allowed" : "pointer",
+            cursor: !token ? "not-allowed" : "pointer",
             fontWeight: 600,
             fontSize: 15,
             marginBottom: 12,
           }}
         >
-          {loading ? "Verify kar raha hai..." : "Admin Access Claim Karein"}
+          Admin Dashboard Kholein
         </button>
         <Link to="/">
           <button
@@ -3311,8 +3237,9 @@ export default function AdminDashboard() {
   const { actor, isFetching } = useActor();
   const { identity, login, isLoggingIn, clear } = useInternetIdentity();
 
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [checkingAdmin, setCheckingAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(
+    () => localStorage.getItem("clikmate_admin_auth") === "1",
+  );
   const [activeSection, setActiveSection] = useState<NavSection>("catalog");
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -3326,16 +3253,6 @@ export default function AdminDashboard() {
   }, []);
 
   const isMobile = windowWidth < 768;
-
-  useEffect(() => {
-    if (!actor || isFetching) return;
-    setCheckingAdmin(true);
-    actor
-      .isCallerAdmin()
-      .then((v) => setIsAdmin(v))
-      .catch(() => setIsAdmin(false))
-      .finally(() => setCheckingAdmin(false));
-  }, [actor, isFetching]);
 
   function loadCatalog() {
     if (!actor) return;
@@ -3566,53 +3483,9 @@ export default function AdminDashboard() {
     );
   }
 
-  // ── View 2: Checking admin / loading ──────────────────────────────────────
-  if (checkingAdmin || isFetching) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#0a0f1e",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          data-ocid="admin.loading_state"
-          style={{ textAlign: "center", color: "rgba(255,255,255,0.5)" }}
-        >
-          <Loader2
-            style={{
-              width: 36,
-              height: 36,
-              margin: "0 auto 12px",
-              animation: "spin 1s linear infinite",
-              color: "#8b5cf6",
-            }}
-          />
-          <p>Verifying admin access...</p>
-        </div>
-      </div>
-    );
-  }
-
   // ── View 3: Access denied ─────────────────────────────────────────────────
-  if (isAdmin === false) {
-    return (
-      <AdminInitScreen
-        actor={actor}
-        onSuccess={() => {
-          setIsAdmin(null);
-          setCheckingAdmin(true);
-          actor
-            ?.isCallerAdmin()
-            .then((v) => setIsAdmin(v))
-            .catch(() => setIsAdmin(false))
-            .finally(() => setCheckingAdmin(false));
-        }}
-      />
-    );
+  if (!isAdmin) {
+    return <AdminInitScreen onSuccess={() => setIsAdmin(true)} />;
   }
 
   // ── View 4: Full Dashboard ────────────────────────────────────────────────
@@ -3817,7 +3690,11 @@ export default function AdminDashboard() {
           <button
             type="button"
             data-ocid="admin.logout.button"
-            onClick={clear}
+            onClick={() => {
+              localStorage.removeItem("clikmate_admin_auth");
+              setIsAdmin(false);
+              clear();
+            }}
             style={{
               width: "100%",
               padding: "8px",
