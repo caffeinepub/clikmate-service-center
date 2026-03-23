@@ -1,0 +1,82 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+    --brand-blue: 0.29 0.087 256;
+    --brand-navy: 0.22 0.072 252;
+    --brand-yellow: 0.87 0.185 95;
+    --background: 1 0 0;
+    --foreground: 0.145 0 0;
+    --card: 1 0 0;
+    --card-foreground: 0.145 0 0;
+    --popover: 1 0 0;
+    --popover-foreground: 0.145 0 0;
+    --primary: 0.29 0.087 256;
+    --primary-foreground: 1 0 0;
+    --secondary: 0.87 0.185 95;
+    --secondary-foreground: 0.15 0 0;
+    --muted: 0.96 0 0;
+    --muted-foreground: 0.5 0 0;
+    --accent: 0.87 0.185 95;
+    --accent-foreground: 0.15 0 0;
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.985 0 0;
+    --border: 0.9 0 0;
+    --input: 0.9 0 0;
+    --ring: 0.29 0.087 256;
+    --chart-1: 0.646 0.222 41.116;
+    --chart-2: 0.6 0.118 184.704;
+    --chart-3: 0.398 0.07 227.392;
+    --chart-4: 0.828 0.189 84.429;
+    --chart-5: 0.769 0.188 70.08;
+    --sidebar: 0.985 0 0;
+    --sidebar-foreground: 0.145 0 0;
+    --sidebar-primary: 0.29 0.087 256;
+    --sidebar-primary-foreground: 1 0 0;
+    --sidebar-accent: 0.97 0 0;
+    --sidebar-accent-foreground: 0.205 0 0;
+    --sidebar-border: 0.922 0 0;
+    --sidebar-ring: 0.708 0 0;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-poppins;
+  }
+}
+
+@layer utilities {
+  .hero-gradient {
+    background: linear-gradient(
+      135deg,
+      oklch(0.22 0.072 252) 0%,
+      oklch(0.29 0.087 256) 60%,
+      oklch(0.35 0.09 260) 100%
+    );
+  }
+  .navy-bg {
+    background-color: oklch(0.22 0.072 252);
+  }
+  .blue-bg {
+    background-color: oklch(0.29 0.087 256);
+  }
+  .yellow-bg {
+    background-color: oklch(0.87 0.185 95);
+  }
+  .yellow-text {
+    color: oklch(0.87 0.185 95);
+  }
+  .blue-text {
+    color: oklch(0.29 0.087 256);
+  }
+  .section-gray {
+    background-color: oklch(0.97 0.003 240);
+  }
+}
