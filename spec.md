@@ -1,44 +1,39 @@
 # ClikMate Service Center
 
 ## Current State
-- Rider Dashboard at `/#/rider` shows hardcoded dummy orders with OTP `1234`
-- Rider login accepts any mobile/PIN without backend verification
-- Backend `ShopOrder` type has no `deliveryOtp` field
-- No rider account management in backend or admin dashboard
-- No public API to fetch orders filtered by status
-- `updateShopOrderStatus` is admin-only and does not generate OTPs
-- Admin dashboard has no "Team & Access" tab for rider management
-- Status options in admin do not include "Ready for Delivery"
+Admin Dashboard at `/#/admin` has a two-step authentication:
+1. **Internet Identity (ICP)** login as Step 1 (if `identity` is null, show II login screen)
+2. **Master Key password** (`CLIKMATE-ADMIN-2024`) as Step 2 (`AdminInitScreen` component)
+
+The current system depends on `useInternetIdentity` hook and ICP identity. Users have been locked out repeatedly. The Settings tab currently only has UPI payment settings.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Backend: `Rider` type `{name: Text; mobile: Text; pin: Text}`
-- Backend: rider store, `addRider` (admin), `removeRider` (admin), `getRiders` (admin), `verifyRider(mobile, pin)` (public)
-- Backend: `deliveryOtp` field to `ShopOrder` type
-- Backend: `getReadyForDeliveryOrders()` - public query returning orders with status "Ready for Delivery"
-- Backend: `markOrderDelivered(orderId: Nat, otp: Text)` - public, verifies OTP then sets status to "Delivered"
-- Admin Dashboard: "Team & Access" nav section with rider management (add/remove riders)
-- Admin Dashboard: "Ready for Delivery" added to `SHOP_ORDER_STATUSES`
+- New `AdminLoginScreen` component: professional email + password form with "Smart Online Service Center" branding
+- Default credentials stored in localStorage: `admin@clikmate.com` / `admin123` (hashed or plain for now)
+- "Change Password" section in the Settings tab (current password + new password + confirm)
+- Session stored in `localStorage` key `clikmate_admin_session`
 
 ### Modify
-- Backend: `updateShopOrderStatus` - when setting status to "Ready for Delivery", auto-generate 4-digit OTP and store in `deliveryOtp`
-- Rider Dashboard login: call `verifyRider(mobile, pin)` instead of accepting any credentials
-- Rider Dashboard orders list: fetch from `getReadyForDeliveryOrders()` instead of dummy data
-- Rider Dashboard OTP confirm: call `markOrderDelivered(orderId, otp)` instead of checking hardcoded OTP
-- Remove demo hint text from login and OTP modal
+- `AdminDashboard` main component: remove ALL Internet Identity / ICP auth logic (`useInternetIdentity`, `identity`, `login`, `isLoggingIn`, `clear` references)
+- Replace the two-step auth flow with a single email+password check
+- Remove `AdminInitScreen` (master key screen) -- replaced by `AdminLoginScreen`
+- Settings section: add "Change Admin Password" card below UPI settings
+- Logout button: clear localStorage session key, return to login screen
 
 ### Remove
-- Hardcoded `INITIAL_DELIVERIES` dummy data from RiderDashboard
-- Hardcoded OTP `1234` check
+- `useInternetIdentity` import and all usages in `AdminDashboard.tsx`
+- "Login with Internet Identity" button and the entire `if (!identity)` block
+- `AdminInitScreen` component
+- `clikmate_admin_auth` localStorage key (replaced by `clikmate_admin_session`)
 
 ## Implementation Plan
-1. Update `ShopOrder` type to include `deliveryOtp: Text`
-2. Add `Rider` type and rider store with CRUD + verifyRider functions to main.mo
-3. Update `updateShopOrderStatus` to auto-generate 4-digit OTP on "Ready for Delivery"
-4. Add public `getReadyForDeliveryOrders()` query
-5. Add public `markOrderDelivered(orderId, otp)` mutation
-6. Regenerate backend bindings
-7. Add "Ready for Delivery" to admin status dropdown
-8. Add "Team & Access" tab to admin dashboard with rider management UI
-9. Rewrite RiderDashboard to use real backend calls
+1. Remove `useInternetIdentity` hook usage and all ICP auth code from `AdminDashboard`
+2. Add `adminCredentials` state initialized from localStorage (default: email=`admin@clikmate.com`, password=`admin123`)
+3. Create `AdminLoginScreen` with email + password fields, "Smart Online Service Center" logo/branding, professional dark UI matching existing design language (navy/purple/yellow)
+4. Add session check: `localStorage.getItem('clikmate_admin_session') === '1'` to auto-login
+5. On successful login, set session in localStorage and show dashboard
+6. Add "Change Admin Password" card to `SettingsSection`: current password verification, new password, confirm password
+7. On password change, update stored credentials in localStorage
+8. Logout clears `clikmate_admin_session` from localStorage

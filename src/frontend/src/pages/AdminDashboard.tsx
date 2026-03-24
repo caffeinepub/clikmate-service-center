@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useActor } from "@/hooks/useActor";
-import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { Link } from "@/utils/router";
 import {
   AlertTriangle,
@@ -2492,6 +2491,155 @@ function OrderHistorySection({ actor }: { actor: backendInterface | null }) {
 
 // ─── Settings Section ─────────────────────────────────────────────────────────
 
+// ─── Change Password Form ─────────────────────────────────────────────────────
+function ChangePasswordForm() {
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function handleUpdate() {
+    setError("");
+    const stored =
+      localStorage.getItem("clikmate_admin_password") || "admin123";
+    if (currentPw !== stored) {
+      setError("Current password is incorrect.");
+      return;
+    }
+    if (newPw.length < 6) {
+      setError("New password must be at least 6 characters.");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setError("New passwords do not match.");
+      return;
+    }
+    setSaving(true);
+    setTimeout(() => {
+      localStorage.setItem("clikmate_admin_password", newPw);
+      toast.success("Password updated successfully!");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+      setSaving(false);
+    }, 300);
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "#0f1829",
+    color: "white",
+    fontSize: 14,
+    outline: "none",
+    boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 12,
+    fontWeight: 600,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  };
+
+  return (
+    <div style={{ maxWidth: 400 }}>
+      <div style={{ marginBottom: 14 }}>
+        <label htmlFor="cp-current" style={labelStyle}>
+          Current Password
+        </label>
+        <input
+          id="cp-current"
+          data-ocid="admin.settings.current_password.input"
+          type="password"
+          placeholder="••••••••"
+          value={currentPw}
+          onChange={(e) => setCurrentPw(e.target.value)}
+          style={inputStyle}
+        />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label htmlFor="cp-new" style={labelStyle}>
+          New Password
+        </label>
+        <input
+          id="cp-new"
+          data-ocid="admin.settings.new_password.input"
+          type="password"
+          placeholder="Min 6 characters"
+          value={newPw}
+          onChange={(e) => setNewPw(e.target.value)}
+          style={inputStyle}
+        />
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label htmlFor="cp-confirm" style={labelStyle}>
+          Confirm New Password
+        </label>
+        <input
+          id="cp-confirm"
+          data-ocid="admin.settings.confirm_password.input"
+          type="password"
+          placeholder="Re-enter new password"
+          value={confirmPw}
+          onChange={(e) => setConfirmPw(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
+          style={inputStyle}
+        />
+      </div>
+      {error && (
+        <p
+          data-ocid="admin.settings.password.error_state"
+          style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}
+        >
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        data-ocid="admin.settings.password.save_button"
+        onClick={handleUpdate}
+        disabled={saving || !currentPw || !newPw || !confirmPw}
+        style={{
+          padding: "10px 24px",
+          borderRadius: 10,
+          border: "none",
+          background:
+            saving || !currentPw || !newPw || !confirmPw
+              ? "#374151"
+              : "#7c3aed",
+          color: "white",
+          fontWeight: 600,
+          fontSize: 14,
+          cursor:
+            saving || !currentPw || !newPw || !confirmPw
+              ? "not-allowed"
+              : "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        {saving ? (
+          <Loader2
+            style={{
+              width: 14,
+              height: 14,
+              animation: "spin 1s linear infinite",
+            }}
+          />
+        ) : null}
+        {saving ? "Updating..." : "Update Password"}
+      </button>
+    </div>
+  );
+}
+
 function SettingsSection({ actor }: { actor: backendInterface | null }) {
   const [upiId, setUpiId] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState("");
@@ -2735,26 +2883,94 @@ function SettingsSection({ actor }: { actor: backendInterface | null }) {
           </div>
         </div>
       </div>
+      {/* Change Admin Password */}
+      <div style={{ ...S.card, marginBottom: 24 }}>
+        <div
+          style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: "rgba(139,92,246,0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Shield style={{ width: 18, height: 18, color: "#a78bfa" }} />
+          </div>
+          <div>
+            <h3
+              style={{
+                color: "white",
+                fontWeight: 700,
+                fontSize: 15,
+                margin: 0,
+              }}
+            >
+              Change Admin Password
+            </h3>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.4)",
+                fontSize: 12,
+                margin: 0,
+              }}
+            >
+              Update your admin login credentials
+            </p>
+          </div>
+        </div>
+        <div style={{ padding: 20 }}>
+          <ChangePasswordForm />
+        </div>
+      </div>
     </div>
   );
 }
 
-// ─── Admin Init Screen ───────────────────────────────────────────────────────
-function AdminInitScreen({
-  onSuccess,
-}: {
-  onSuccess: () => void;
-}) {
-  const [token, setToken] = useState("");
-  const [error, setError] = useState("");
+// ─── Admin Login Screen ──────────────────────────────────────────────────────
+function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
+  // Initialize default credentials if not set
+  if (!localStorage.getItem("clikmate_admin_email")) {
+    localStorage.setItem("clikmate_admin_email", "admin@clikmate.com");
+  }
+  if (!localStorage.getItem("clikmate_admin_password")) {
+    localStorage.setItem("clikmate_admin_password", "admin123");
+  }
 
-  function handleClaim() {
-    if (token === "CLIKMATE-ADMIN-2024") {
-      localStorage.setItem("clikmate_admin_auth", "1");
-      onSuccess();
-    } else {
-      setError("Password galat hai. Dobara try karein.");
-    }
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function handleLogin() {
+    setError("");
+    setLoading(true);
+    setTimeout(() => {
+      const storedEmail =
+        localStorage.getItem("clikmate_admin_email") || "admin@clikmate.com";
+      const storedPassword =
+        localStorage.getItem("clikmate_admin_password") || "admin123";
+      if (
+        email.trim().toLowerCase() === storedEmail.toLowerCase() &&
+        password === storedPassword
+      ) {
+        localStorage.setItem("clikmate_admin_session", "1");
+        onSuccess();
+      } else {
+        setError("Invalid email or password.");
+        setLoading(false);
+      }
+    }, 400);
   }
 
   return (
@@ -2765,68 +2981,147 @@ function AdminInitScreen({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        position: "relative",
+        overflow: "hidden",
         padding: 16,
       }}
     >
+      {/* Decorative blobs */}
       <div
-        data-ocid="admin.init_screen"
         style={{
-          background: "#1a2236",
-          border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: 20,
-          padding: 40,
+          position: "absolute",
+          width: 400,
+          height: 400,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)",
+          top: "-100px",
+          right: "-100px",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          width: 300,
+          height: 300,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(234,179,8,0.08) 0%, transparent 70%)",
+          bottom: "-80px",
+          left: "-80px",
+          pointerEvents: "none",
+        }}
+      />
+
+      <div
+        data-ocid="admin.login.dialog"
+        style={{
           maxWidth: 420,
           width: "100%",
+          background: "rgba(255,255,255,0.04)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: 24,
+          padding: "40px 36px",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.5)",
           textAlign: "center",
         }}
       >
-        <AlertTriangle
+        {/* Logo */}
+        <div
           style={{
-            width: 48,
-            height: 48,
-            color: "#f59e0b",
-            margin: "0 auto 16px",
-          }}
-        />
-        <h2
-          style={{
-            color: "white",
-            fontWeight: 700,
-            fontSize: 18,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
             marginBottom: 8,
           }}
         >
-          Admin Login
-        </h2>
-        <p
-          style={{
-            color: "rgba(255,255,255,0.5)",
-            fontSize: 14,
-            marginBottom: 24,
-            lineHeight: 1.6,
-          }}
-        >
-          Admin password enter karein dashboard access ke liye.
-        </p>
-        <div style={{ textAlign: "left", marginBottom: 16 }}>
-          <label
-            htmlFor="admin-token-input"
+          <div
             style={{
-              color: "rgba(255,255,255,0.7)",
-              fontSize: 13,
-              display: "block",
-              marginBottom: 6,
+              width: 52,
+              height: 52,
+              borderRadius: "50%",
+              background: "#eab308",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 20px rgba(234,179,8,0.4)",
+              flexShrink: 0,
             }}
           >
-            Admin Password
+            <Printer style={{ width: 26, height: 26, color: "#111" }} />
+          </div>
+          <div style={{ textAlign: "left" }}>
+            <div
+              style={{
+                color: "white",
+                fontWeight: 800,
+                fontSize: 16,
+                letterSpacing: "-0.5px",
+                lineHeight: 1.2,
+              }}
+            >
+              Smart Online
+            </div>
+            <div
+              style={{
+                color: "rgba(255,255,255,0.55)",
+                fontSize: 12,
+                lineHeight: 1.2,
+              }}
+            >
+              Service Center
+            </div>
+          </div>
+        </div>
+
+        <h1
+          style={{
+            color: "white",
+            fontWeight: 700,
+            fontSize: 20,
+            marginBottom: 4,
+            marginTop: 20,
+          }}
+        >
+          Admin Dashboard Login
+        </h1>
+        <p
+          style={{
+            color: "rgba(255,255,255,0.45)",
+            fontSize: 13,
+            marginBottom: 28,
+          }}
+        >
+          Enter your credentials to access the dashboard
+        </p>
+
+        {/* Email field */}
+        <div style={{ textAlign: "left", marginBottom: 14 }}>
+          <label
+            htmlFor="admin-email"
+            style={{
+              display: "block",
+              color: "rgba(255,255,255,0.6)",
+              fontSize: 12,
+              fontWeight: 600,
+              marginBottom: 6,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+            }}
+          >
+            Email
           </label>
           <input
-            id="admin-token-input"
-            type="password"
-            placeholder="Password enter karein..."
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleClaim()}
+            id="admin-email"
+            data-ocid="admin.login.input"
+            type="email"
+            placeholder="admin@clikmate.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             style={{
               width: "100%",
               padding: "10px 14px",
@@ -2840,46 +3135,105 @@ function AdminInitScreen({
             }}
           />
         </div>
+
+        {/* Password field */}
+        <div style={{ textAlign: "left", marginBottom: 20 }}>
+          <label
+            htmlFor="admin-password"
+            style={{
+              display: "block",
+              color: "rgba(255,255,255,0.6)",
+              fontSize: 12,
+              fontWeight: 600,
+              marginBottom: 6,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+            }}
+          >
+            Password
+          </label>
+          <input
+            id="admin-password"
+            data-ocid="admin.login.input"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+            style={{
+              width: "100%",
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "#0f1829",
+              color: "white",
+              fontSize: 14,
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
         {error && (
-          <p style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>
+          <p
+            data-ocid="admin.login.error_state"
+            style={{
+              color: "#ef4444",
+              fontSize: 13,
+              marginBottom: 14,
+              textAlign: "left",
+            }}
+          >
             {error}
           </p>
         )}
+
         <button
           type="button"
-          onClick={handleClaim}
-          disabled={!token}
-          data-ocid="admin.init.claim_button"
+          data-ocid="admin.login.primary_button"
+          onClick={handleLogin}
+          disabled={loading || !email || !password}
           style={{
             width: "100%",
-            padding: "12px",
-            borderRadius: 10,
+            padding: "13px",
+            borderRadius: 12,
             border: "none",
-            background: !token ? "#374151" : "#7c3aed",
+            background: loading || !email || !password ? "#374151" : "#7c3aed",
             color: "white",
-            cursor: !token ? "not-allowed" : "pointer",
-            fontWeight: 600,
+            fontWeight: 700,
             fontSize: 15,
-            marginBottom: 12,
+            cursor: loading || !email || !password ? "not-allowed" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            transition: "all 0.2s",
           }}
         >
-          Admin Dashboard Kholein
+          {loading ? (
+            <Loader2
+              style={{
+                width: 18,
+                height: 18,
+                animation: "spin 1s linear infinite",
+              }}
+            />
+          ) : null}
+          {loading ? "Signing in..." : "Login"}
         </button>
-        <Link to="/">
-          <button
-            type="button"
-            style={{
-              padding: "8px 20px",
-              borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "transparent",
-              color: "rgba(255,255,255,0.6)",
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            Back to Site
-          </button>
+
+        <Link
+          to="/"
+          data-ocid="admin.login.link"
+          style={{
+            display: "block",
+            marginTop: 20,
+            color: "rgba(255,255,255,0.4)",
+            fontSize: 13,
+            textDecoration: "none",
+          }}
+        >
+          ← Back to Site
         </Link>
       </div>
     </div>
@@ -3235,10 +3589,8 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
 
 export default function AdminDashboard() {
   const { actor, isFetching } = useActor();
-  const { identity, login, isLoggingIn, clear } = useInternetIdentity();
-
   const [isAdmin, setIsAdmin] = useState<boolean>(
-    () => localStorage.getItem("clikmate_admin_auth") === "1",
+    () => localStorage.getItem("clikmate_admin_session") === "1",
   );
   const [activeSection, setActiveSection] = useState<NavSection>("catalog");
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
@@ -3279,213 +3631,9 @@ export default function AdminDashboard() {
     team: "Team & Access",
   };
 
-  // ── View 1: Not logged in ──────────────────────────────────────────────────
-  if (!identity) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "linear-gradient(135deg, #0f1729 0%, #1a1040 100%)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          position: "relative",
-          overflow: "hidden",
-          padding: 16,
-        }}
-      >
-        {/* Decorative circles */}
-        <div
-          style={{
-            position: "absolute",
-            width: 400,
-            height: 400,
-            borderRadius: "50%",
-            background:
-              "radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)",
-            top: "-100px",
-            right: "-100px",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            width: 300,
-            height: 300,
-            borderRadius: "50%",
-            background:
-              "radial-gradient(circle, rgba(234,179,8,0.08) 0%, transparent 70%)",
-            bottom: "-80px",
-            left: "-80px",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            width: 200,
-            height: 200,
-            borderRadius: "50%",
-            background:
-              "radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%)",
-            top: "40%",
-            left: "10%",
-            pointerEvents: "none",
-          }}
-        />
-
-        {/* Login card */}
-        <div
-          style={{
-            maxWidth: 420,
-            width: "100%",
-            background: "rgba(255,255,255,0.05)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: 24,
-            padding: "40px 36px",
-            boxShadow: "0 25px 60px rgba(0,0,0,0.5)",
-            textAlign: "center",
-          }}
-        >
-          {/* Logo */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 12,
-              marginBottom: 28,
-            }}
-          >
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: "50%",
-                background: "#eab308",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 4px 20px rgba(234,179,8,0.4)",
-              }}
-            >
-              <Printer style={{ width: 26, height: 26, color: "#111" }} />
-            </div>
-            <div style={{ textAlign: "left" }}>
-              <div
-                style={{
-                  color: "white",
-                  fontWeight: 800,
-                  fontSize: 20,
-                  letterSpacing: "-0.5px",
-                }}
-              >
-                ClikMate
-              </div>
-              <div
-                style={{
-                  color: "rgba(255,255,255,0.45)",
-                  fontSize: 12,
-                  marginTop: -2,
-                }}
-              >
-                Admin Portal
-              </div>
-            </div>
-          </div>
-
-          <h1
-            style={{
-              color: "white",
-              fontWeight: 700,
-              fontSize: 22,
-              marginBottom: 8,
-            }}
-          >
-            Secure Admin Login
-          </h1>
-          <p
-            style={{
-              color: "rgba(255,255,255,0.55)",
-              fontSize: 14,
-              lineHeight: 1.6,
-              marginBottom: 28,
-            }}
-          >
-            Sign in with Internet Identity to access the dashboard
-          </p>
-
-          <button
-            type="button"
-            data-ocid="admin.login.primary_button"
-            onClick={login}
-            disabled={isLoggingIn}
-            style={{
-              width: "100%",
-              padding: "14px",
-              borderRadius: 12,
-              border: "none",
-              background: "#eab308",
-              color: "#111",
-              fontWeight: 700,
-              fontSize: 15,
-              cursor: isLoggingIn ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              boxShadow: "0 4px 20px rgba(234,179,8,0.35)",
-              opacity: isLoggingIn ? 0.8 : 1,
-              transition: "all 0.2s",
-            }}
-          >
-            {isLoggingIn ? (
-              <Loader2
-                style={{
-                  width: 18,
-                  height: 18,
-                  animation: "spin 1s linear infinite",
-                }}
-              />
-            ) : (
-              <Shield style={{ width: 18, height: 18 }} />
-            )}
-            {isLoggingIn ? "Signing in..." : "Login with Internet Identity"}
-          </button>
-
-          <p
-            style={{
-              marginTop: 16,
-              color: "rgba(255,255,255,0.3)",
-              fontSize: 12,
-            }}
-          >
-            🔒 Protected by Internet Computer Identity
-          </p>
-
-          <Link
-            to="/"
-            data-ocid="admin.home.link"
-            style={{
-              display: "block",
-              marginTop: 20,
-              color: "rgba(255,255,255,0.45)",
-              fontSize: 13,
-              textDecoration: "none",
-            }}
-          >
-            ← Back to Site
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // ── View 3: Access denied ─────────────────────────────────────────────────
+  // ── View: Not logged in ──────────────────────────────────────────────────────
   if (!isAdmin) {
-    return <AdminInitScreen onSuccess={() => setIsAdmin(true)} />;
+    return <AdminLoginScreen onSuccess={() => setIsAdmin(true)} />;
   }
 
   // ── View 4: Full Dashboard ────────────────────────────────────────────────
@@ -3680,7 +3828,8 @@ export default function AdminDashboard() {
             </div>
             <div>
               <div style={{ color: "white", fontWeight: 600, fontSize: 13 }}>
-                Admin
+                {localStorage.getItem("clikmate_admin_email") ||
+                  "admin@clikmate.com"}
               </div>
               <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>
                 Active
@@ -3691,9 +3840,8 @@ export default function AdminDashboard() {
             type="button"
             data-ocid="admin.logout.button"
             onClick={() => {
-              localStorage.removeItem("clikmate_admin_auth");
+              localStorage.removeItem("clikmate_admin_session");
               setIsAdmin(false);
-              clear();
             }}
             style={{
               width: "100%",
