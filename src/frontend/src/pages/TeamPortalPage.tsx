@@ -1,5 +1,5 @@
 import { useNavigate } from "@/utils/router";
-import { Crown, Package, ShieldCheck, Truck } from "lucide-react";
+import { Crown, Package, Printer, ShieldCheck, Truck } from "lucide-react";
 import { useState } from "react";
 
 function PortalCard({
@@ -114,8 +114,8 @@ export default function TeamPortalPage() {
         </div>
       )}
 
-      {/* Cards */}
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Cards - 2x2 grid on desktop */}
+      <div className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <PortalCard
           icon={<Crown className="w-7 h-7" style={{ color: "#0a0f1e" }} />}
           title="Super Admin"
@@ -133,6 +133,15 @@ export default function TeamPortalPage() {
           accentColor="#f59e0b"
           accentBg="rgba(245,158,11,0.25)"
           onClick={() => navigate("/pos-login")}
+        />
+        <PortalCard
+          icon={<Printer className="w-7 h-7" style={{ color: "#0a0f1e" }} />}
+          title="Bulk Printing Staff"
+          description="Handle large B2B orders, bulk typesetting & coaching institute requests"
+          buttonLabel="Bulk Staff Login"
+          accentColor="#c084fc"
+          accentBg="rgba(192,132,252,0.2)"
+          onClick={() => navigate("/bulk-login")}
         />
         <PortalCard
           icon={<Truck className="w-7 h-7" style={{ color: "#0a0f1e" }} />}

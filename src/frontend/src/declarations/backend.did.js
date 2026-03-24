@@ -23,6 +23,7 @@ export const ExternalBlob = IDL.Vec(IDL.Nat8);
 export const CatalogItemInput = IDL.Record({
   'requiredDocuments' : IDL.Text,
   'stockStatus' : IDL.Text,
+  'requiresPdfCalc' : IDL.Bool,
   'name' : IDL.Text,
   'description' : IDL.Text,
   'category' : IDL.Text,
@@ -56,6 +57,7 @@ export const CatalogItem = IDL.Record({
   'id' : IDL.Nat,
   'requiredDocuments' : IDL.Text,
   'stockStatus' : IDL.Text,
+  'requiresPdfCalc' : IDL.Bool,
   'published' : IDL.Bool,
   'name' : IDL.Text,
   'createdAt' : IDL.Int,
@@ -65,6 +67,25 @@ export const CatalogItem = IDL.Record({
   'mediaFiles' : IDL.Vec(ExternalBlob),
   'mediaTypes' : IDL.Vec(IDL.Text),
 });
+export const KhataEntry = IDL.Record({
+  'customerName' : IDL.Text,
+  'lastUpdated' : IDL.Int,
+  'totalDue' : IDL.Float64,
+  'phone' : IDL.Text,
+});
+export const Review = IDL.Record({
+  'id' : IDL.Nat,
+  'customerName' : IDL.Text,
+  'deliveryRating' : IDL.Opt(IDL.Nat),
+  'customerPhone' : IDL.Text,
+  'serviceRating' : IDL.Nat,
+  'published' : IDL.Bool,
+  'createdAt' : IDL.Int,
+  'orderId' : IDL.Nat,
+  'location' : IDL.Text,
+  'deliveryComment' : IDL.Opt(IDL.Text),
+  'serviceComment' : IDL.Text,
+});
 export const TypesettingQuoteRequest = IDL.Record({
   'id' : IDL.Nat,
   'status' : IDL.Text,
@@ -72,7 +93,9 @@ export const TypesettingQuoteRequest = IDL.Record({
   'name' : IDL.Text,
   'submittedAt' : IDL.Int,
   'language' : IDL.Text,
+  'quoteNotes' : IDL.Text,
   'phone' : IDL.Text,
+  'finalPdfUrl' : IDL.Text,
   'format' : IDL.Text,
   'fileUrl' : IDL.Text,
 });
@@ -93,6 +116,21 @@ export const Inquiry = IDL.Record({
   'name' : IDL.Text,
   'message' : IDL.Text,
   'phone' : IDL.Text,
+});
+export const PosSaleItem = IDL.Record({
+  'qty' : IDL.Nat,
+  'itemName' : IDL.Text,
+  'unitPrice' : IDL.Float64,
+  'totalPrice' : IDL.Float64,
+});
+export const PosSale = IDL.Record({
+  'id' : IDL.Nat,
+  'paymentMethod' : IDL.Text,
+  'customerPhone' : IDL.Text,
+  'staffMobile' : IDL.Text,
+  'createdAt' : IDL.Int,
+  'totalAmount' : IDL.Float64,
+  'items' : IDL.Vec(PosSaleItem),
 });
 export const ShopOrderItem = IDL.Record({
   'qty' : IDL.Nat,
@@ -184,16 +222,26 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addCatalogItem' : IDL.Func([CatalogItemInput], [IDL.Nat], []),
+  'addKhataDue' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Float64],
+      [IDL.Float64],
+      [],
+    ),
   'addRider' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
   'addTeamMember' : IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'claimAdminWithMasterKey' : IDL.Func([IDL.Text], [IDL.Bool], []),
+  'clearKhataDue' : IDL.Func([IDL.Text, IDL.Float64], [IDL.Float64], []),
   'deductWallet' : IDL.Func([IDL.Text, IDL.Float64], [IDL.Float64], []),
   'deductWalletForOrder' : IDL.Func([IDL.Text, IDL.Float64], [IDL.Float64], []),
   'deleteCatalogItem' : IDL.Func([IDL.Nat], [], []),
+  'deleteReview' : IDL.Func([IDL.Nat], [], []),
+  'exportBulkLeadsToCsv' : IDL.Func([], [IDL.Text], ['query']),
   'filterOrders' : IDL.Func([FilterOrders], [IDL.Vec(OrderRecord)], ['query']),
   'generateOtp' : IDL.Func([IDL.Text], [IDL.Text], []),
   'getAllCatalogItems' : IDL.Func([], [IDL.Vec(CatalogItem)], ['query']),
+  'getAllKhataEntries' : IDL.Func([], [IDL.Vec(KhataEntry)], ['query']),
+  'getAllReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
   'getAllTypesettingQuotes' : IDL.Func(
       [],
       [IDL.Vec(TypesettingQuoteRequest)],
@@ -216,8 +264,12 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getInquiries' : IDL.Func([], [IDL.Vec(Inquiry)], ['query']),
+  'getKhataEntry' : IDL.Func([IDL.Text], [IDL.Opt(KhataEntry)], ['query']),
   'getOrdersByPhone' : IDL.Func([IDL.Text], [IDL.Vec(OrderRecord)], ['query']),
+  'getPosSales' : IDL.Func([], [IDL.Vec(PosSale)], ['query']),
+  'getPosSalesByPhone' : IDL.Func([IDL.Text], [IDL.Vec(PosSale)], ['query']),
   'getPublishedCatalogItems' : IDL.Func([], [IDL.Vec(CatalogItem)], ['query']),
+  'getPublishedReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
   'getReadyForDeliveryOrders' : IDL.Func(
       [],
       [IDL.Vec(MaskedShopOrder)],
@@ -231,6 +283,7 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getWalletBalance' : IDL.Func([IDL.Text], [IDL.Float64], ['query']),
+  'importBulkLeadsFromCsv' : IDL.Func([IDL.Text], [], []),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'markOrderDelivered' : IDL.Func([IDL.Nat, IDL.Text], [ShopOrder], []),
   'placeCscShopOrder' : IDL.Func(
@@ -262,9 +315,15 @@ export const idlService = IDL.Service({
       [],
     ),
   'rechargeWallet' : IDL.Func([IDL.Text, IDL.Float64], [IDL.Float64], []),
+  'recordPosSale' : IDL.Func(
+      [IDL.Vec(PosSaleItem), IDL.Float64, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Nat],
+      [],
+    ),
   'removeRider' : IDL.Func([IDL.Text], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'saveCustomerProfile' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+  'seedReviews' : IDL.Func([], [], []),
   'setBusinessInfo' : IDL.Func([BusinessInfo], [], []),
   'setUpiSettings' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'submitInquiry' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
@@ -274,13 +333,30 @@ export const idlService = IDL.Service({
       [],
     ),
   'submitOrderFull' : IDL.Func([ServiceOrder], [IDL.Nat], []),
+  'submitReview' : IDL.Func(
+      [
+        IDL.Nat,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Nat,
+        IDL.Text,
+        IDL.Opt(IDL.Nat),
+        IDL.Opt(IDL.Text),
+      ],
+      [IDL.Nat],
+      [],
+    ),
   'submitTypesettingQuoteRequest' : IDL.Func(
       [TypesettingQuoteRequestInput],
       [IDL.Nat],
       [],
     ),
   'togglePublishCatalogItem' : IDL.Func([IDL.Nat], [], []),
+  'toggleReviewPublished' : IDL.Func([IDL.Nat], [], []),
   'updateCatalogItem' : IDL.Func([IDL.Nat, CatalogItemInput], [], []),
+  'updateLeadFinalPdf' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+  'updateLeadQuoteNotes' : IDL.Func([IDL.Nat, IDL.Text], [], []),
   'updateOrderStatus' : IDL.Func([IDL.Nat, IDL.Text], [], []),
   'updateTypesettingQuoteStatus' : IDL.Func(
       [IDL.Nat, TypesettingQuoteUpdate],
@@ -288,6 +364,7 @@ export const idlService = IDL.Service({
       [],
     ),
   'uploadCscFinalOutput' : IDL.Func([IDL.Nat, ExternalBlob], [], []),
+  'verifyBulkStaff' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], ['query']),
   'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   'verifyRider' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], ['query']),
   'verifyStaff' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], ['query']),
@@ -311,6 +388,7 @@ export const idlFactory = ({ IDL }) => {
   const CatalogItemInput = IDL.Record({
     'requiredDocuments' : IDL.Text,
     'stockStatus' : IDL.Text,
+    'requiresPdfCalc' : IDL.Bool,
     'name' : IDL.Text,
     'description' : IDL.Text,
     'category' : IDL.Text,
@@ -344,6 +422,7 @@ export const idlFactory = ({ IDL }) => {
     'id' : IDL.Nat,
     'requiredDocuments' : IDL.Text,
     'stockStatus' : IDL.Text,
+    'requiresPdfCalc' : IDL.Bool,
     'published' : IDL.Bool,
     'name' : IDL.Text,
     'createdAt' : IDL.Int,
@@ -353,6 +432,25 @@ export const idlFactory = ({ IDL }) => {
     'mediaFiles' : IDL.Vec(ExternalBlob),
     'mediaTypes' : IDL.Vec(IDL.Text),
   });
+  const KhataEntry = IDL.Record({
+    'customerName' : IDL.Text,
+    'lastUpdated' : IDL.Int,
+    'totalDue' : IDL.Float64,
+    'phone' : IDL.Text,
+  });
+  const Review = IDL.Record({
+    'id' : IDL.Nat,
+    'customerName' : IDL.Text,
+    'deliveryRating' : IDL.Opt(IDL.Nat),
+    'customerPhone' : IDL.Text,
+    'serviceRating' : IDL.Nat,
+    'published' : IDL.Bool,
+    'createdAt' : IDL.Int,
+    'orderId' : IDL.Nat,
+    'location' : IDL.Text,
+    'deliveryComment' : IDL.Opt(IDL.Text),
+    'serviceComment' : IDL.Text,
+  });
   const TypesettingQuoteRequest = IDL.Record({
     'id' : IDL.Nat,
     'status' : IDL.Text,
@@ -360,7 +458,9 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'submittedAt' : IDL.Int,
     'language' : IDL.Text,
+    'quoteNotes' : IDL.Text,
     'phone' : IDL.Text,
+    'finalPdfUrl' : IDL.Text,
     'format' : IDL.Text,
     'fileUrl' : IDL.Text,
   });
@@ -381,6 +481,21 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'message' : IDL.Text,
     'phone' : IDL.Text,
+  });
+  const PosSaleItem = IDL.Record({
+    'qty' : IDL.Nat,
+    'itemName' : IDL.Text,
+    'unitPrice' : IDL.Float64,
+    'totalPrice' : IDL.Float64,
+  });
+  const PosSale = IDL.Record({
+    'id' : IDL.Nat,
+    'paymentMethod' : IDL.Text,
+    'customerPhone' : IDL.Text,
+    'staffMobile' : IDL.Text,
+    'createdAt' : IDL.Int,
+    'totalAmount' : IDL.Float64,
+    'items' : IDL.Vec(PosSaleItem),
   });
   const ShopOrderItem = IDL.Record({
     'qty' : IDL.Nat,
@@ -472,6 +587,11 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addCatalogItem' : IDL.Func([CatalogItemInput], [IDL.Nat], []),
+    'addKhataDue' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Float64],
+        [IDL.Float64],
+        [],
+      ),
     'addRider' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
     'addTeamMember' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
@@ -480,6 +600,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'claimAdminWithMasterKey' : IDL.Func([IDL.Text], [IDL.Bool], []),
+    'clearKhataDue' : IDL.Func([IDL.Text, IDL.Float64], [IDL.Float64], []),
     'deductWallet' : IDL.Func([IDL.Text, IDL.Float64], [IDL.Float64], []),
     'deductWalletForOrder' : IDL.Func(
         [IDL.Text, IDL.Float64],
@@ -487,6 +608,8 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'deleteCatalogItem' : IDL.Func([IDL.Nat], [], []),
+    'deleteReview' : IDL.Func([IDL.Nat], [], []),
+    'exportBulkLeadsToCsv' : IDL.Func([], [IDL.Text], ['query']),
     'filterOrders' : IDL.Func(
         [FilterOrders],
         [IDL.Vec(OrderRecord)],
@@ -494,6 +617,8 @@ export const idlFactory = ({ IDL }) => {
       ),
     'generateOtp' : IDL.Func([IDL.Text], [IDL.Text], []),
     'getAllCatalogItems' : IDL.Func([], [IDL.Vec(CatalogItem)], ['query']),
+    'getAllKhataEntries' : IDL.Func([], [IDL.Vec(KhataEntry)], ['query']),
+    'getAllReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
     'getAllTypesettingQuotes' : IDL.Func(
         [],
         [IDL.Vec(TypesettingQuoteRequest)],
@@ -516,16 +641,20 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getInquiries' : IDL.Func([], [IDL.Vec(Inquiry)], ['query']),
+    'getKhataEntry' : IDL.Func([IDL.Text], [IDL.Opt(KhataEntry)], ['query']),
     'getOrdersByPhone' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(OrderRecord)],
         ['query'],
       ),
+    'getPosSales' : IDL.Func([], [IDL.Vec(PosSale)], ['query']),
+    'getPosSalesByPhone' : IDL.Func([IDL.Text], [IDL.Vec(PosSale)], ['query']),
     'getPublishedCatalogItems' : IDL.Func(
         [],
         [IDL.Vec(CatalogItem)],
         ['query'],
       ),
+    'getPublishedReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
     'getReadyForDeliveryOrders' : IDL.Func(
         [],
         [IDL.Vec(MaskedShopOrder)],
@@ -539,6 +668,7 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getWalletBalance' : IDL.Func([IDL.Text], [IDL.Float64], ['query']),
+    'importBulkLeadsFromCsv' : IDL.Func([IDL.Text], [], []),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'markOrderDelivered' : IDL.Func([IDL.Nat, IDL.Text], [ShopOrder], []),
     'placeCscShopOrder' : IDL.Func(
@@ -570,9 +700,15 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'rechargeWallet' : IDL.Func([IDL.Text, IDL.Float64], [IDL.Float64], []),
+    'recordPosSale' : IDL.Func(
+        [IDL.Vec(PosSaleItem), IDL.Float64, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Nat],
+        [],
+      ),
     'removeRider' : IDL.Func([IDL.Text], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'saveCustomerProfile' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+    'seedReviews' : IDL.Func([], [], []),
     'setBusinessInfo' : IDL.Func([BusinessInfo], [], []),
     'setUpiSettings' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'submitInquiry' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
@@ -582,13 +718,30 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'submitOrderFull' : IDL.Func([ServiceOrder], [IDL.Nat], []),
+    'submitReview' : IDL.Func(
+        [
+          IDL.Nat,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Nat,
+          IDL.Text,
+          IDL.Opt(IDL.Nat),
+          IDL.Opt(IDL.Text),
+        ],
+        [IDL.Nat],
+        [],
+      ),
     'submitTypesettingQuoteRequest' : IDL.Func(
         [TypesettingQuoteRequestInput],
         [IDL.Nat],
         [],
       ),
     'togglePublishCatalogItem' : IDL.Func([IDL.Nat], [], []),
+    'toggleReviewPublished' : IDL.Func([IDL.Nat], [], []),
     'updateCatalogItem' : IDL.Func([IDL.Nat, CatalogItemInput], [], []),
+    'updateLeadFinalPdf' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+    'updateLeadQuoteNotes' : IDL.Func([IDL.Nat, IDL.Text], [], []),
     'updateOrderStatus' : IDL.Func([IDL.Nat, IDL.Text], [], []),
     'updateTypesettingQuoteStatus' : IDL.Func(
         [IDL.Nat, TypesettingQuoteUpdate],
@@ -596,6 +749,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'uploadCscFinalOutput' : IDL.Func([IDL.Nat, ExternalBlob], [], []),
+    'verifyBulkStaff' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], ['query']),
     'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
     'verifyRider' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], ['query']),
     'verifyStaff' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], ['query']),

@@ -26,7 +26,7 @@ import {
   User,
   Wallet,
 } from "lucide-react";
-import { PenLine } from "lucide-react";
+import { AlertCircle, PenLine } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { OrderRecord, ShopOrder } from "../backend";
 import type { backendInterface } from "../backend.d";
@@ -95,6 +95,7 @@ export default function DashboardModal({
   const [loading, setLoading] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [walletLoading, setWalletLoading] = useState(false);
+  const [khataBalance, setKhataBalance] = useState<number | null>(null);
 
   const [shopOrders, setShopOrders] = useState<ShopOrder[]>([]);
   const [reviewModalOrder, setReviewModalOrder] = useState<ShopOrder | null>(
@@ -119,11 +120,15 @@ export default function DashboardModal({
             all.filter((o: ShopOrder) => o.phone === phone),
           )
           .catch(() => [] as ShopOrder[]),
+        (actor as unknown as backendInterface)
+          .getKhataEntry(phone)
+          .catch(() => null),
       ])
-        .then(([ordersData, balance, shopOrdersData]) => {
+        .then(([ordersData, balance, shopOrdersData, khataEntry]) => {
           setOrders(ordersData);
           setWalletBalance(balance);
           setShopOrders(shopOrdersData || []);
+          setKhataBalance((khataEntry as any)?.totalDue ?? null);
         })
         .finally(() => {
           setLoading(false);
@@ -228,6 +233,46 @@ export default function DashboardModal({
               </div>
             </div>
 
+            {/* Khata / Due Balance Section */}
+            {khataBalance !== null && khataBalance > 0 && (
+              <div className="mb-4">
+                <div
+                  data-ocid="dashboard.khata.card"
+                  className="rounded-2xl p-4 flex items-start gap-3"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.08))",
+                    border: "1px solid rgba(239,68,68,0.35)",
+                  }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: "rgba(239,68,68,0.2)" }}
+                  >
+                    <AlertCircle
+                      className="w-5 h-5"
+                      style={{ color: "#ef4444" }}
+                    />
+                  </div>
+                  <div>
+                    <p
+                      className="font-bold text-sm"
+                      style={{ color: "#ef4444" }}
+                    >
+                      Outstanding Shop Due: ₹{khataBalance.toFixed(2)}
+                    </p>
+                    <p
+                      className="text-xs mt-1"
+                      style={{ color: "rgba(255,255,255,0.5)" }}
+                    >
+                      You have an outstanding balance at Smart Online Service
+                      Center. Please visit the shop or contact us to clear your
+                      dues.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold blue-text text-base flex items-center gap-2">
                 <Package className="w-5 h-5" />

@@ -21,6 +21,7 @@ export interface CatalogItem {
   'id' : bigint,
   'requiredDocuments' : string,
   'stockStatus' : string,
+  'requiresPdfCalc' : boolean,
   'published' : boolean,
   'name' : string,
   'createdAt' : bigint,
@@ -33,6 +34,7 @@ export interface CatalogItem {
 export interface CatalogItemInput {
   'requiredDocuments' : string,
   'stockStatus' : string,
+  'requiresPdfCalc' : boolean,
   'name' : string,
   'description' : string,
   'category' : string,
@@ -50,6 +52,12 @@ export interface FilterOrders {
 export interface Inquiry {
   'name' : string,
   'message' : string,
+  'phone' : string,
+}
+export interface KhataEntry {
+  'customerName' : string,
+  'lastUpdated' : bigint,
+  'totalDue' : number,
   'phone' : string,
 }
 export interface MaskedShopOrder {
@@ -74,6 +82,34 @@ export interface OrderRecord {
   'uploadedFiles' : Array<ExternalBlob>,
   'phone' : string,
   'fileUrl' : string,
+}
+export interface PosSale {
+  'id' : bigint,
+  'paymentMethod' : string,
+  'customerPhone' : string,
+  'staffMobile' : string,
+  'createdAt' : bigint,
+  'totalAmount' : number,
+  'items' : Array<PosSaleItem>,
+}
+export interface PosSaleItem {
+  'qty' : bigint,
+  'itemName' : string,
+  'unitPrice' : number,
+  'totalPrice' : number,
+}
+export interface Review {
+  'id' : bigint,
+  'customerName' : string,
+  'deliveryRating' : [] | [bigint],
+  'customerPhone' : string,
+  'serviceRating' : bigint,
+  'published' : boolean,
+  'createdAt' : bigint,
+  'orderId' : bigint,
+  'location' : string,
+  'deliveryComment' : [] | [string],
+  'serviceComment' : string,
 }
 export interface Rider {
   'pin' : string,
@@ -117,7 +153,9 @@ export interface TypesettingQuoteRequest {
   'name' : string,
   'submittedAt' : bigint,
   'language' : string,
+  'quoteNotes' : string,
   'phone' : string,
+  'finalPdfUrl' : string,
   'format' : string,
   'fileUrl' : string,
 }
@@ -169,16 +207,22 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addCatalogItem' : ActorMethod<[CatalogItemInput], bigint>,
+  'addKhataDue' : ActorMethod<[string, string, number], number>,
   'addRider' : ActorMethod<[string, string, string], undefined>,
   'addTeamMember' : ActorMethod<[string, string, string, string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'claimAdminWithMasterKey' : ActorMethod<[string], boolean>,
+  'clearKhataDue' : ActorMethod<[string, number], number>,
   'deductWallet' : ActorMethod<[string, number], number>,
   'deductWalletForOrder' : ActorMethod<[string, number], number>,
   'deleteCatalogItem' : ActorMethod<[bigint], undefined>,
+  'deleteReview' : ActorMethod<[bigint], undefined>,
+  'exportBulkLeadsToCsv' : ActorMethod<[], string>,
   'filterOrders' : ActorMethod<[FilterOrders], Array<OrderRecord>>,
   'generateOtp' : ActorMethod<[string], string>,
   'getAllCatalogItems' : ActorMethod<[], Array<CatalogItem>>,
+  'getAllKhataEntries' : ActorMethod<[], Array<KhataEntry>>,
+  'getAllReviews' : ActorMethod<[], Array<Review>>,
   'getAllTypesettingQuotes' : ActorMethod<[], Array<TypesettingQuoteRequest>>,
   'getBusinessInfo' : ActorMethod<[], BusinessInfo>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
@@ -189,13 +233,18 @@ export interface _SERVICE {
     [] | [{ 'customerName' : string, 'deliveryAddress' : string }]
   >,
   'getInquiries' : ActorMethod<[], Array<Inquiry>>,
+  'getKhataEntry' : ActorMethod<[string], [] | [KhataEntry]>,
   'getOrdersByPhone' : ActorMethod<[string], Array<OrderRecord>>,
+  'getPosSales' : ActorMethod<[], Array<PosSale>>,
+  'getPosSalesByPhone' : ActorMethod<[string], Array<PosSale>>,
   'getPublishedCatalogItems' : ActorMethod<[], Array<CatalogItem>>,
+  'getPublishedReviews' : ActorMethod<[], Array<Review>>,
   'getReadyForDeliveryOrders' : ActorMethod<[], Array<MaskedShopOrder>>,
   'getRiders' : ActorMethod<[], Array<Rider>>,
   'getUpiSettings' : ActorMethod<[], [] | [UpiSettings]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getWalletBalance' : ActorMethod<[string], number>,
+  'importBulkLeadsFromCsv' : ActorMethod<[string], undefined>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'markOrderDelivered' : ActorMethod<[bigint, string], ShopOrder>,
   'placeCscShopOrder' : ActorMethod<
@@ -217,26 +266,48 @@ export interface _SERVICE {
     ShopOrder
   >,
   'rechargeWallet' : ActorMethod<[string, number], number>,
+  'recordPosSale' : ActorMethod<
+    [Array<PosSaleItem>, number, string, string, string],
+    bigint
+  >,
   'removeRider' : ActorMethod<[string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'saveCustomerProfile' : ActorMethod<[string, string, string], undefined>,
+  'seedReviews' : ActorMethod<[], undefined>,
   'setBusinessInfo' : ActorMethod<[BusinessInfo], undefined>,
   'setUpiSettings' : ActorMethod<[string, string], undefined>,
   'submitInquiry' : ActorMethod<[string, string, string], undefined>,
   'submitOrder' : ActorMethod<[string, string, string, string, string], bigint>,
   'submitOrderFull' : ActorMethod<[ServiceOrder], bigint>,
+  'submitReview' : ActorMethod<
+    [
+      bigint,
+      string,
+      string,
+      string,
+      bigint,
+      string,
+      [] | [bigint],
+      [] | [string],
+    ],
+    bigint
+  >,
   'submitTypesettingQuoteRequest' : ActorMethod<
     [TypesettingQuoteRequestInput],
     bigint
   >,
   'togglePublishCatalogItem' : ActorMethod<[bigint], undefined>,
+  'toggleReviewPublished' : ActorMethod<[bigint], undefined>,
   'updateCatalogItem' : ActorMethod<[bigint, CatalogItemInput], undefined>,
+  'updateLeadFinalPdf' : ActorMethod<[bigint, string], undefined>,
+  'updateLeadQuoteNotes' : ActorMethod<[bigint, string], undefined>,
   'updateOrderStatus' : ActorMethod<[bigint, string], undefined>,
   'updateTypesettingQuoteStatus' : ActorMethod<
     [bigint, TypesettingQuoteUpdate],
     undefined
   >,
   'uploadCscFinalOutput' : ActorMethod<[bigint, ExternalBlob], undefined>,
+  'verifyBulkStaff' : ActorMethod<[string, string], boolean>,
   'verifyOtp' : ActorMethod<[string, string], boolean>,
   'verifyRider' : ActorMethod<[string, string], boolean>,
   'verifyStaff' : ActorMethod<[string, string], boolean>,

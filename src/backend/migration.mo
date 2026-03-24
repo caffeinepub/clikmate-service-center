@@ -1,190 +1,56 @@
 import Map "mo:core/Map";
 import Nat "mo:core/Nat";
-import Principal "mo:core/Principal";
-import Storage "blob-storage/Storage";
 
 module {
-  // Old types (before the migration)
-  type OldBusinessInfo = {
-    name : Text;
-    address : Text;
-    phone : Text;
-    email : Text;
-    hours : Text;
-  };
-
-  type OldInquiry = {
-    name : Text;
-    phone : Text;
-    message : Text;
-  };
-
-  type OldOrderRecord = {
+  // Old typesetting quote request (old actor state)
+  type OldTypesettingQuoteRequest = {
     id : Nat;
     name : Text;
     phone : Text;
-    serviceType : Text;
-    instructions : Text;
+    subject : Text;
+    format : Text;
+    language : Text;
     fileUrl : Text;
     status : Text;
-    uploadedFiles : [Storage.ExternalBlob];
     submittedAt : Int;
   };
 
-  type OldUserProfile = {
-    name : Text;
-    phone : Text;
-    customerName : ?Text;
-    deliveryAddress : ?Text;
-  };
-
-  type OldCatalogItem = {
-    id : Nat;
-    name : Text;
-    category : Text;
-    description : Text;
-    price : Text;
-    stockStatus : Text;
-    published : Bool;
-    mediaFiles : [Storage.ExternalBlob];
-    mediaTypes : [Text];
-    createdAt : Int;
-  };
-
-  type OldShopOrderItem = {
-    itemId : Nat;
-    itemName : Text;
-    qty : Nat;
-    price : Float;
-  };
-
-  type OldShopOrder = {
-    id : Nat;
-    phone : Text;
-    customerName : Text;
-    deliveryMethod : Text;
-    deliveryAddress : Text;
-    paymentMethod : Text;
-    items : [OldShopOrderItem];
-    totalAmount : Float;
-    status : Text;
-    createdAt : Int;
-  };
-
-  type OldUpiSettings = {
-    upiId : Text;
-    qrCodeUrl : Text;
-  };
-
+  // Old actor type
   type OldActor = {
-    businessInfo : ?OldBusinessInfo;
-    inquiries : Map.Map<Text, OldInquiry>;
-    nextOrderId : Nat;
-    orders : Map.Map<Nat, OldOrderRecord>;
-    otpStore : Map.Map<Text, Text>;
-    userProfiles : Map.Map<Principal, OldUserProfile>;
-    nextCatalogId : Nat;
-    catalogItems : Map.Map<Nat, OldCatalogItem>;
-    nextShopOrderId : Nat;
-    shopOrders : Map.Map<Nat, OldShopOrder>;
-    upiSettings : ?OldUpiSettings;
-    customerProfiles : Map.Map<Text, { customerName : Text; deliveryAddress : Text }>;
+    typesettingQuotes : Map.Map<Nat, OldTypesettingQuoteRequest>;
   };
 
-  // New types (after the migration)
-  type NewBusinessInfo = {
-    name : Text;
-    address : Text;
-    phone : Text;
-    email : Text;
-    hours : Text;
-  };
-
-  type NewInquiry = {
-    name : Text;
-    phone : Text;
-    message : Text;
-  };
-
-  type NewOrderRecord = {
+  // New types with extended fields
+  type NewTypesettingQuoteRequest = {
     id : Nat;
     name : Text;
     phone : Text;
-    serviceType : Text;
-    instructions : Text;
+    subject : Text;
+    format : Text;
+    language : Text;
     fileUrl : Text;
     status : Text;
-    uploadedFiles : [Storage.ExternalBlob];
     submittedAt : Int;
+    finalPdfUrl : Text;
+    quoteNotes : Text;
   };
 
-  type NewUserProfile = {
-    name : Text;
-    phone : Text;
-    customerName : ?Text;
-    deliveryAddress : ?Text;
-  };
-
-  type NewCatalogItem = {
-    id : Nat;
-    name : Text;
-    category : Text;
-    description : Text;
-    price : Text;
-    stockStatus : Text;
-    published : Bool;
-    mediaFiles : [Storage.ExternalBlob];
-    mediaTypes : [Text];
-    createdAt : Int;
-  };
-
-  type NewShopOrderItem = {
-    itemId : Nat;
-    itemName : Text;
-    qty : Nat;
-    price : Float;
-  };
-
-  type NewShopOrder = {
-    id : Nat;
-    phone : Text;
-    customerName : Text;
-    deliveryMethod : Text;
-    deliveryAddress : Text;
-    paymentMethod : Text;
-    items : [NewShopOrderItem];
-    totalAmount : Float;
-    status : Text;
-    createdAt : Int;
-    deliveryOtp : Text;
-  };
-
-  type NewUpiSettings = {
-    upiId : Text;
-    qrCodeUrl : Text;
-  };
-
+  // New actor type
   type NewActor = {
-    businessInfo : ?NewBusinessInfo;
-    inquiries : Map.Map<Text, NewInquiry>;
-    nextOrderId : Nat;
-    orders : Map.Map<Nat, NewOrderRecord>;
-    otpStore : Map.Map<Text, Text>;
-    userProfiles : Map.Map<Principal, NewUserProfile>;
-    nextCatalogId : Nat;
-    catalogItems : Map.Map<Nat, NewCatalogItem>;
-    nextShopOrderId : Nat;
-    shopOrders : Map.Map<Nat, NewShopOrder>;
-    upiSettings : ?NewUpiSettings;
-    customerProfiles : Map.Map<Text, { customerName : Text; deliveryAddress : Text }>;
+    typesettingQuotes : Map.Map<Nat, NewTypesettingQuoteRequest>;
   };
 
+  // Migration function called by the main actor via the with-clause
   public func run(old : OldActor) : NewActor {
-    let newShopOrders = old.shopOrders.map<Nat, OldShopOrder, NewShopOrder>(
-      func(_id, oldOrder) {
-        { oldOrder with deliveryOtp = "" };
+    let newTypesettingQuotes = old.typesettingQuotes.map<Nat, OldTypesettingQuoteRequest, NewTypesettingQuoteRequest>(
+      func(_id, oldQuote) {
+        {
+          oldQuote with
+          finalPdfUrl = "";
+          quoteNotes = "";
+        };
       }
     );
-    { old with shopOrders = newShopOrders };
+    { typesettingQuotes = newTypesettingQuotes };
   };
 };

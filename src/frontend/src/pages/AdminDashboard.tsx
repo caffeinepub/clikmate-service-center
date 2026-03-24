@@ -26,6 +26,7 @@ import { Link } from "@/utils/router";
 import {
   AlertTriangle,
   Bell,
+  Building2,
   ClipboardList,
   Edit2,
   Eye,
@@ -68,6 +69,13 @@ const CATEGORIES = [
 ];
 
 const STOCK_STATUSES = ["In Stock", "Out of Stock", "Limited Stock"];
+const PRODUCT_CATEGORIES = ["Retail Accessories"];
+const SERVICE_CATEGORIES = [
+  "Printing & Document",
+  "CSC & Govt Forms",
+  "Typing",
+  "Misc",
+];
 
 const CATEGORY_COLORS: Record<string, string> = {
   "CSC & Govt Services":
@@ -93,7 +101,8 @@ type NavSection =
   | "settings"
   | "team"
   | "wallet"
-  | "reviews";
+  | "reviews"
+  | "b2b-leads";
 
 interface MediaFile {
   id: string;
@@ -112,6 +121,7 @@ interface FormState {
   price: string;
   stockStatus: string;
   requiredDocuments: string;
+  requiresPdfCalc: boolean;
   mediaFiles: MediaFile[];
 }
 
@@ -122,6 +132,7 @@ const EMPTY_FORM: FormState = {
   price: "",
   stockStatus: "In Stock",
   requiredDocuments: "",
+  requiresPdfCalc: false,
   mediaFiles: [],
 };
 
@@ -536,6 +547,7 @@ function ItemFormModal({
           price: editItem.price,
           stockStatus: editItem.stockStatus,
           requiredDocuments: editItem.requiredDocuments || "",
+          requiresPdfCalc: editItem.requiresPdfCalc || false,
           mediaFiles,
         });
       } else {
@@ -582,6 +594,7 @@ function ItemFormModal({
         stockStatus: form.stockStatus,
         requiredDocuments:
           form.category === "CSC & Govt Services" ? form.requiredDocuments : "",
+        requiresPdfCalc: form.requiresPdfCalc,
         mediaFiles: uploadedBlobs,
         mediaTypes,
       };
@@ -1117,6 +1130,601 @@ function StatsCard({
   );
 }
 
+// ─── Product Form Modal ──────────────────────────────────────────────────────
+
+function ProductFormModal({
+  open,
+  onClose,
+  actor,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  actor: backendInterface | null;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    category: "Retail Accessories",
+    price: "",
+    stockStatus: "In Stock",
+    description: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open)
+      setForm({
+        name: "",
+        category: "Retail Accessories",
+        price: "",
+        stockStatus: "In Stock",
+        description: "",
+      });
+  }, [open]);
+
+  async function handleSave() {
+    if (!actor) return;
+    if (!form.name.trim() || !form.price.trim()) {
+      toast.error("Name and Selling Price are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const input: CatalogItemInput = {
+        name: form.name,
+        category: form.category,
+        description: form.description,
+        price: form.price,
+        stockStatus: form.stockStatus,
+        requiredDocuments: "",
+        requiresPdfCalc: false,
+        mediaFiles: [],
+        mediaTypes: [],
+      };
+      await actor.addCatalogItem(input);
+      toast.success("Product Added Successfully");
+      onSaved();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to add product.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) return null;
+
+  const labelStyle: React.CSSProperties = {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 12,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: 6,
+    display: "block",
+  };
+  const inputStyle: React.CSSProperties = {
+    ...S.input,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "#e2e8f0",
+  };
+
+  return (
+    <div
+      role="presentation"
+      data-ocid="admin.product.modal"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0,0,0,0.7)",
+        padding: "16px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div style={{ ...S.modal, maxWidth: 480, width: "100%" }}>
+        <div
+          style={{
+            padding: "20px 24px 0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <h2 style={{ color: "white", fontWeight: 700, fontSize: 18 }}>
+            Add New Product
+          </h2>
+          <button
+            type="button"
+            data-ocid="admin.product.close_button"
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              color: "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              fontSize: 20,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+        <div
+          style={{
+            padding: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div>
+            <label htmlFor="product-name" style={labelStyle}>
+              Name *
+            </label>
+            <input
+              id="product-name"
+              data-ocid="admin.product.input"
+              style={inputStyle}
+              placeholder="e.g. USB Cable, Earphones"
+              value={form.name}
+              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label htmlFor="product-category" style={labelStyle}>
+              Category
+            </label>
+            <select
+              id="product-category"
+              data-ocid="admin.product.select"
+              style={{ ...inputStyle, appearance: "none" }}
+              value={form.category}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, category: e.target.value }))
+              }
+            >
+              {PRODUCT_CATEGORIES.map((c) => (
+                <option key={c} value={c} style={{ background: "#1a2236" }}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="product-price" style={labelStyle}>
+              Selling Price *
+            </label>
+            <input
+              id="product-price"
+              data-ocid="admin.product_price.input"
+              style={inputStyle}
+              placeholder="e.g. ₹199"
+              value={form.price}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, price: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label htmlFor="product-stock" style={labelStyle}>
+              Stock Quantity
+            </label>
+            <select
+              id="product-stock"
+              data-ocid="admin.product.stock.select"
+              style={{ ...inputStyle, appearance: "none" }}
+              value={form.stockStatus}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, stockStatus: e.target.value }))
+              }
+            >
+              {STOCK_STATUSES.map((s) => (
+                <option key={s} value={s} style={{ background: "#1a2236" }}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="product-desc" style={labelStyle}>
+              Description
+            </label>
+            <textarea
+              id="product-desc"
+              data-ocid="admin.product.textarea"
+              style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
+              placeholder="Optional description..."
+              value={form.description}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, description: e.target.value }))
+              }
+            />
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              data-ocid="admin.product.cancel_button"
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.15)",
+                background: "transparent",
+                color: "rgba(255,255,255,0.7)",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-ocid="admin.product.submit_button"
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                padding: "8px 20px",
+                borderRadius: 8,
+                border: "none",
+                background: "#059669",
+                color: "white",
+                cursor: saving ? "not-allowed" : "pointer",
+                fontWeight: 700,
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? "Saving..." : "Add Product"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Service Form Modal ───────────────────────────────────────────────────────
+
+function ServiceFormModal({
+  open,
+  onClose,
+  actor,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  actor: backendInterface | null;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    category: "Printing & Document",
+    price: "",
+    description: "",
+    requiredDocuments: "",
+    requiresPdfCalc: false,
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open)
+      setForm({
+        name: "",
+        category: "Printing & Document",
+        price: "",
+        description: "",
+        requiredDocuments: "",
+        requiresPdfCalc: false,
+      });
+  }, [open]);
+
+  async function handleSave() {
+    if (!actor) return;
+    if (!form.name.trim() || !form.price.trim()) {
+      toast.error("Name and Base Rate are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const input: CatalogItemInput = {
+        name: form.name,
+        category: form.category,
+        description: form.description,
+        price: form.price,
+        stockStatus: "N/A",
+        requiredDocuments:
+          form.category === "CSC & Govt Forms" ? form.requiredDocuments : "",
+        requiresPdfCalc: form.requiresPdfCalc,
+        mediaFiles: [],
+        mediaTypes: [],
+      };
+      await actor.addCatalogItem(input);
+      toast.success("Service Added Successfully");
+      onSaved();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to add service.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) return null;
+
+  const labelStyle: React.CSSProperties = {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 12,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: 6,
+    display: "block",
+  };
+  const inputStyle: React.CSSProperties = {
+    ...S.input,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "#e2e8f0",
+  };
+
+  return (
+    <div
+      role="presentation"
+      data-ocid="admin.service.modal"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0,0,0,0.7)",
+        padding: "16px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div style={{ ...S.modal, maxWidth: 480, width: "100%" }}>
+        <div
+          style={{
+            padding: "20px 24px 0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <h2 style={{ color: "white", fontWeight: 700, fontSize: 18 }}>
+            Add New Service
+          </h2>
+          <button
+            type="button"
+            data-ocid="admin.service.close_button"
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              color: "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              fontSize: 20,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+        <div
+          style={{
+            padding: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div>
+            <label htmlFor="service-name" style={labelStyle}>
+              Name *
+            </label>
+            <input
+              id="service-name"
+              data-ocid="admin.service.input"
+              style={inputStyle}
+              placeholder="e.g. Color Printing, PAN Card Application"
+              value={form.name}
+              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label htmlFor="service-category" style={labelStyle}>
+              Category
+            </label>
+            <select
+              id="service-category"
+              data-ocid="admin.service.select"
+              style={{ ...inputStyle, appearance: "none" }}
+              value={form.category}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, category: e.target.value }))
+              }
+            >
+              {SERVICE_CATEGORIES.map((c) => (
+                <option key={c} value={c} style={{ background: "#1a2236" }}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="service-price" style={labelStyle}>
+              Base Rate *
+            </label>
+            <input
+              id="service-price"
+              data-ocid="admin.service_price.input"
+              style={inputStyle}
+              placeholder="e.g. ₹2/page or ₹50"
+              value={form.price}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, price: e.target.value }))
+              }
+            />
+          </div>
+          {form.category === "CSC & Govt Forms" && (
+            <div>
+              <label htmlFor="service-req-docs" style={labelStyle}>
+                Required Documents (Comma Separated)
+              </label>
+              <input
+                id="service-req-docs"
+                data-ocid="admin.service_docs.input"
+                style={inputStyle}
+                placeholder="e.g. Aadhaar, Passport Photo, Signature"
+                value={form.requiredDocuments}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, requiredDocuments: e.target.value }))
+                }
+              />
+              <p
+                style={{
+                  color: "rgba(167,139,250,0.7)",
+                  fontSize: 11,
+                  marginTop: 4,
+                }}
+              >
+                Each document becomes an upload button for the customer
+              </p>
+            </div>
+          )}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "10px 12px",
+              background: "rgba(245,158,11,0.06)",
+              border: "1px solid rgba(245,158,11,0.2)",
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <p style={{ ...labelStyle, color: "#f59e0b", marginBottom: 2 }}>
+                Requires PDF Page Calculation
+              </p>
+              <p
+                style={{
+                  color: "rgba(255,255,255,0.4)",
+                  fontSize: 10,
+                  lineHeight: 1.4,
+                }}
+              >
+                Enable for printing/photocopy services to auto-detect PDF pages
+                on POS
+              </p>
+            </div>
+            <button
+              type="button"
+              data-ocid="admin.service.pdf_calc.toggle"
+              onClick={() =>
+                setForm((p) => ({ ...p, requiresPdfCalc: !p.requiresPdfCalc }))
+              }
+              style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                border: "none",
+                background: form.requiresPdfCalc
+                  ? "#f59e0b"
+                  : "rgba(255,255,255,0.15)",
+                cursor: "pointer",
+                position: "relative",
+                transition: "background 0.2s",
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: form.requiresPdfCalc ? 23 : 3,
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  background: "white",
+                  transition: "left 0.2s",
+                }}
+              />
+            </button>
+          </div>
+          <div>
+            <label htmlFor="service-desc" style={labelStyle}>
+              Description
+            </label>
+            <textarea
+              id="service-desc"
+              data-ocid="admin.service.textarea"
+              style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
+              placeholder="Optional description..."
+              value={form.description}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, description: e.target.value }))
+              }
+            />
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              data-ocid="admin.service.cancel_button"
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.15)",
+                background: "transparent",
+                color: "rgba(255,255,255,0.7)",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-ocid="admin.service.submit_button"
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                padding: "8px 20px",
+                borderRadius: 8,
+                border: "none",
+                background: "#7c3aed",
+                color: "white",
+                cursor: saving ? "not-allowed" : "pointer",
+                fontWeight: 700,
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? "Saving..." : "Add Service"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Catalog Section ──────────────────────────────────────────────────────────
 
 function CatalogSection({
@@ -1132,13 +1740,28 @@ function CatalogSection({
 }) {
   const [search, setSearch] = useState("");
   const [addEditOpen, setAddEditOpen] = useState(false);
+  const [addType, setAddType] = useState<"product" | "service" | null>(null);
   const [editItem, setEditItem] = useState<CatalogItem | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CatalogItem | null>(null);
   const [togglingId, setTogglingId] = useState<bigint | null>(null);
   const [deletingId, setDeletingId] = useState<bigint | null>(null);
+  const [catalogTab, setCatalogTab] = useState<"products" | "services">(
+    "services",
+  );
 
-  const filtered = items.filter(
+  const SERVICE_CAT_LIST = [
+    "Printing & Document",
+    "CSC & Govt Forms",
+    "Typing",
+    "Misc",
+  ];
+  const tabFiltered = items.filter((item) =>
+    catalogTab === "services"
+      ? SERVICE_CAT_LIST.includes(item.category)
+      : !SERVICE_CAT_LIST.includes(item.category),
+  );
+  const filtered = tabFiltered.filter(
     (item) =>
       item.name.toLowerCase().includes(search.toLowerCase()) ||
       item.category.toLowerCase().includes(search.toLowerCase()),
@@ -1253,10 +1876,28 @@ function CatalogSection({
           <button
             type="button"
             data-ocid="admin.catalog.primary_button"
-            onClick={() => {
-              setEditItem(null);
-              setAddEditOpen(true);
+            onClick={() => setAddType("product")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 10,
+              border: "none",
+              background: "#059669",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              whiteSpace: "nowrap",
             }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Product
+          </button>
+          <button
+            type="button"
+            data-ocid="admin.catalog.secondary_button"
+            onClick={() => setAddType("service")}
             style={{
               padding: "8px 16px",
               borderRadius: 10,
@@ -1272,9 +1913,46 @@ function CatalogSection({
               whiteSpace: "nowrap",
             }}
           >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add New Item
+            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Service
           </button>
         </div>
+      </div>
+
+      {/* Tab Toggle */}
+      <div
+        style={{
+          display: "flex",
+          gap: 0,
+          marginBottom: 4,
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          paddingLeft: 20,
+        }}
+      >
+        {(["services", "products"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            data-ocid={`admin.catalog.${tab}.tab`}
+            onClick={() => setCatalogTab(tab)}
+            style={{
+              padding: "10px 24px",
+              background: "transparent",
+              border: "none",
+              borderBottom:
+                catalogTab === tab
+                  ? "2px solid #7c3aed"
+                  : "2px solid transparent",
+              color: catalogTab === tab ? "#a78bfa" : "rgba(255,255,255,0.5)",
+              fontWeight: catalogTab === tab ? 600 : 400,
+              fontSize: 14,
+              cursor: "pointer",
+              transition: "all 0.15s",
+              textTransform: "capitalize",
+            }}
+          >
+            {tab === "services" ? "Services" : "Products"}
+          </button>
+        ))}
       </div>
 
       {/* Table */}
@@ -1322,7 +2000,7 @@ function CatalogSection({
                   "Item Name",
                   "Category",
                   "Price",
-                  "Stock",
+                  ...(catalogTab === "products" ? ["Stock"] : []),
                   "Status",
                   "Actions",
                 ].map((h) => (
@@ -1460,31 +2138,33 @@ function CatalogSection({
                   >
                     {item.price}
                   </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "3px 10px",
-                        borderRadius: 20,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        backgroundColor:
-                          item.stockStatus === "In Stock"
-                            ? "rgba(16,185,129,0.15)"
-                            : item.stockStatus === "Out of Stock"
-                              ? "rgba(239,68,68,0.15)"
-                              : "rgba(245,158,11,0.15)",
-                        color:
-                          item.stockStatus === "In Stock"
-                            ? "#34d399"
-                            : item.stockStatus === "Out of Stock"
-                              ? "#f87171"
-                              : "#fbbf24",
-                      }}
-                    >
-                      {item.stockStatus}
-                    </span>
-                  </td>
+                  {catalogTab === "products" && (
+                    <td style={{ padding: "12px 16px" }}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 10px",
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          backgroundColor:
+                            item.stockStatus === "In Stock"
+                              ? "rgba(16,185,129,0.15)"
+                              : item.stockStatus === "Out of Stock"
+                                ? "rgba(239,68,68,0.15)"
+                                : "rgba(245,158,11,0.15)",
+                          color:
+                            item.stockStatus === "In Stock"
+                              ? "#34d399"
+                              : item.stockStatus === "Out of Stock"
+                                ? "#f87171"
+                                : "#fbbf24",
+                        }}
+                      >
+                        {item.stockStatus}
+                      </span>
+                    </td>
+                  )}
                   <td style={{ padding: "12px 16px" }}>
                     <span
                       style={{
@@ -1640,6 +2320,18 @@ function CatalogSection({
         open={addEditOpen}
         onClose={() => setAddEditOpen(false)}
         editItem={editItem}
+        actor={actor}
+        onSaved={onRefresh}
+      />
+      <ProductFormModal
+        open={addType === "product"}
+        onClose={() => setAddType(null)}
+        actor={actor}
+        onSaved={onRefresh}
+      />
+      <ServiceFormModal
+        open={addType === "service"}
+        onClose={() => setAddType(null)}
         actor={actor}
         onSaved={onRefresh}
       />
@@ -2291,252 +2983,6 @@ function ShopOrderStatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Typesetting Quotes Table ─────────────────────────────────────────────────
-
-function TypesettingQuotesTable({ actor }: { actor: backendInterface | null }) {
-  const [quotes, setQuotes] = useState<TypesettingQuoteRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState<bigint | null>(null);
-
-  function loadQuotes() {
-    if (!actor) return;
-    setLoading(true);
-    (actor as unknown as backendInterface)
-      .getAllTypesettingQuotes()
-      .then((data) => setQuotes(data))
-      .catch(() => toast.error("Failed to load quotes."))
-      .finally(() => setLoading(false));
-  }
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadQuotes is stable
-  useEffect(() => {
-    loadQuotes();
-  }, [actor]);
-
-  async function handleStatusUpdate(id: bigint, status: string) {
-    if (!actor) return;
-    setUpdatingId(id);
-    try {
-      await (actor as unknown as backendInterface).updateTypesettingQuoteStatus(
-        id,
-        { status },
-      );
-      toast.success(`Quote status updated to "${status}"`);
-      loadQuotes();
-    } catch {
-      toast.error("Failed to update status.");
-    } finally {
-      setUpdatingId(null);
-    }
-  }
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          textAlign: "center",
-          padding: 40,
-          color: "rgba(255,255,255,0.4)",
-        }}
-      >
-        <Loader2
-          style={{
-            width: 28,
-            height: 28,
-            margin: "0 auto",
-            animation: "spin 1s linear infinite",
-          }}
-        />
-      </div>
-    );
-  }
-
-  if (quotes.length === 0) {
-    return (
-      <div
-        data-ocid="admin.typesetting_quotes.empty_state"
-        style={{
-          textAlign: "center",
-          padding: 40,
-          color: "rgba(255,255,255,0.35)",
-        }}
-      >
-        <p>No typesetting quote requests yet.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}
-      >
-        <thead>
-          <tr>
-            {[
-              "ID",
-              "Name",
-              "Phone",
-              "Subject",
-              "Format",
-              "Language",
-              "Submitted",
-              "Status",
-              "Action",
-            ].map((h) => (
-              <th
-                key={h}
-                style={{
-                  padding: "10px 12px",
-                  textAlign: "left",
-                  color: "rgba(255,255,255,0.4)",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  borderBottom: "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {quotes.map((q, idx) => (
-            <tr
-              key={String(q.id)}
-              data-ocid={`admin.typesetting_quotes.item.${idx + 1}`}
-              style={{
-                backgroundColor:
-                  idx % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent",
-                borderBottom: "1px solid rgba(255,255,255,0.05)",
-              }}
-            >
-              <td
-                style={{
-                  padding: "10px 12px",
-                  color: "#a78bfa",
-                  fontWeight: 600,
-                  fontSize: 13,
-                }}
-              >
-                #{String(q.id)}
-              </td>
-              <td
-                style={{ padding: "10px 12px", color: "white", fontSize: 13 }}
-              >
-                {q.name}
-              </td>
-              <td
-                style={{
-                  padding: "10px 12px",
-                  color: "rgba(255,255,255,0.6)",
-                  fontSize: 13,
-                }}
-              >
-                {q.phone}
-              </td>
-              <td
-                style={{
-                  padding: "10px 12px",
-                  color: "rgba(255,255,255,0.8)",
-                  fontSize: 13,
-                }}
-              >
-                {q.subject}
-              </td>
-              <td
-                style={{
-                  padding: "10px 12px",
-                  color: "rgba(255,255,255,0.7)",
-                  fontSize: 12,
-                }}
-              >
-                {q.format}
-              </td>
-              <td
-                style={{
-                  padding: "10px 12px",
-                  color: "rgba(255,255,255,0.7)",
-                  fontSize: 12,
-                }}
-              >
-                {q.language}
-              </td>
-              <td
-                style={{
-                  padding: "10px 12px",
-                  color: "rgba(255,255,255,0.4)",
-                  fontSize: 12,
-                }}
-              >
-                {new Date(Number(q.submittedAt) / 1_000_000).toLocaleDateString(
-                  "en-IN",
-                  { day: "numeric", month: "short" },
-                )}
-              </td>
-              <td style={{ padding: "10px 12px" }}>
-                <span
-                  style={{
-                    padding: "3px 10px",
-                    borderRadius: 20,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background:
-                      q.status === "Completed"
-                        ? "rgba(16,185,129,0.2)"
-                        : q.status === "In Progress"
-                          ? "rgba(59,130,246,0.2)"
-                          : q.status === "Rejected"
-                            ? "rgba(239,68,68,0.2)"
-                            : "rgba(234,179,8,0.2)",
-                    color:
-                      q.status === "Completed"
-                        ? "#10b981"
-                        : q.status === "In Progress"
-                          ? "#60a5fa"
-                          : q.status === "Rejected"
-                            ? "#f87171"
-                            : "#fbbf24",
-                  }}
-                >
-                  {q.status || "Pending"}
-                </span>
-              </td>
-              <td style={{ padding: "10px 12px" }}>
-                <select
-                  data-ocid={`admin.typesetting_quotes.status.select.${idx + 1}`}
-                  onChange={(e) => handleStatusUpdate(q.id, e.target.value)}
-                  disabled={updatingId === q.id}
-                  defaultValue=""
-                  style={{
-                    background: "rgba(255,255,255,0.07)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    borderRadius: 8,
-                    padding: "5px 8px",
-                    color: "white",
-                    fontSize: 12,
-                    cursor: "pointer",
-                    outline: "none",
-                  }}
-                >
-                  <option value="" disabled>
-                    Update status
-                  </option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Rejected">Rejected</option>
-                </select>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function ActiveOrdersSection({ actor }: { actor: backendInterface | null }) {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3148,20 +3594,6 @@ function ActiveOrdersSection({ actor }: { actor: backendInterface | null }) {
         )}
       </div>
 
-      {/* Typesetting Quote Requests */}
-      <div style={{ marginTop: 40 }}>
-        <h2
-          style={{
-            color: "white",
-            fontWeight: 700,
-            fontSize: 16,
-            marginBottom: 16,
-          }}
-        >
-          Custom Quote Requests (Typesetting)
-        </h2>
-        <TypesettingQuotesTable actor={actor} />
-      </div>
       {viewingActiveFiles && (
         <FilesViewerModal
           files={viewingActiveFiles}
@@ -4563,36 +4995,85 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
 
 // ─── Team & Access Section ────────────────────────────────────────────────────
 
+const ROLE_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string }
+> = {
+  "Shop Staff": {
+    label: "Shop Staff",
+    color: "#60a5fa",
+    bg: "rgba(96,165,250,0.15)",
+  },
+  "Bulk Printing Staff": {
+    label: "Bulk Printing",
+    color: "#c084fc",
+    bg: "rgba(192,132,252,0.15)",
+  },
+  Rider: { label: "Rider", color: "#fb923c", bg: "rgba(251,146,60,0.15)" },
+  // Legacy role name mappings
+  Staff: { label: "Shop Staff", color: "#60a5fa", bg: "rgba(96,165,250,0.15)" },
+  "Delivery Rider": {
+    label: "Rider",
+    color: "#fb923c",
+    bg: "rgba(251,146,60,0.15)",
+  },
+};
+
+function RoleBadge({ role }: { role: string }) {
+  const cfg = ROLE_CONFIG[role] ?? {
+    label: role,
+    color: "#94a3b8",
+    bg: "rgba(148,163,184,0.15)",
+  };
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "3px 10px",
+        borderRadius: 20,
+        fontSize: 12,
+        fontWeight: 600,
+        color: cfg.color,
+        background: cfg.bg,
+        border: `1px solid ${cfg.color}30`,
+      }}
+    >
+      {cfg.label}
+    </span>
+  );
+}
+
 function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
-  const [riders, setRiders] = useState<
-    Array<{ name: string; mobile: string; pin: string }>
+  const [members, setMembers] = useState<
+    Array<{ name: string; mobile: string; pin: string; role: string }>
   >([]);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [pin, setPin] = useState("");
+  const [role, setRole] = useState("Shop Staff");
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
 
-  async function loadRiders() {
+  async function loadMembers() {
     if (!actor) return;
     setLoading(true);
     try {
       const list = await (actor as unknown as backendInterface).getRiders();
-      setRiders(list);
+      setMembers(list);
     } catch {
-      toast.error("Failed to load riders.");
+      toast.error("Failed to load team members.");
     } finally {
       setLoading(false);
     }
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadRiders is stable
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadMembers is stable
   useEffect(() => {
-    loadRiders();
+    loadMembers();
   }, [actor]);
 
-  async function handleAddRider() {
+  async function handleAddMember() {
     if (!actor) return;
     if (!name.trim() || mobile.length !== 10 || pin.length !== 4) {
       toast.error("Please fill all fields correctly.");
@@ -4600,39 +5081,41 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
     }
     setAdding(true);
     try {
-      await (actor as unknown as backendInterface).addRider(
+      await (actor as unknown as backendInterface).addTeamMember(
         name.trim(),
         mobile,
         pin,
+        role,
       );
-      toast.success("Rider added successfully.");
+      toast.success("Team member added successfully.");
       setName("");
       setMobile("");
       setPin("");
-      await loadRiders();
+      setRole("Shop Staff");
+      await loadMembers();
     } catch {
-      toast.error("Failed to add rider.");
+      toast.error("Failed to add team member.");
     } finally {
       setAdding(false);
     }
   }
 
-  async function handleRemoveRider(riderMobile: string) {
+  async function handleRemoveMember(memberMobile: string) {
     if (!actor) return;
-    setRemoving(riderMobile);
+    setRemoving(memberMobile);
     try {
-      await (actor as unknown as backendInterface).removeRider(riderMobile);
-      toast.success("Rider removed.");
-      await loadRiders();
+      await (actor as unknown as backendInterface).removeRider(memberMobile);
+      toast.success("Team member removed.");
+      await loadMembers();
     } catch {
-      toast.error("Failed to remove rider.");
+      toast.error("Failed to remove team member.");
     } finally {
       setRemoving(null);
     }
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: 700 }}>
+    <div style={{ padding: "24px", maxWidth: 760 }}>
       <h2
         style={{
           color: "#f1f5f9",
@@ -4644,11 +5127,11 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
         Team & Access
       </h2>
       <p style={{ color: "#94a3b8", fontSize: 14, marginBottom: 24 }}>
-        Manage delivery rider accounts. Riders log in at /#/rider with their
-        mobile + PIN.
+        Manage all staff, riders, and printing team members. Each role has a
+        dedicated login portal.
       </p>
 
-      {/* Add Rider Form */}
+      {/* Add Team Member Form */}
       <div
         style={{
           background: "#1e293b",
@@ -4666,14 +5149,10 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
             marginBottom: 16,
           }}
         >
-          Add New Rider
+          Add New Team Member
         </h3>
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gap: 12,
-          }}
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
         >
           <div>
             <Label
@@ -4688,7 +5167,7 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
             </Label>
             <Input
               data-ocid="admin.team.name.input"
-              placeholder="Rider name"
+              placeholder="Employee name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               style={{
@@ -4707,7 +5186,7 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
                 display: "block",
               }}
             >
-              Mobile Number
+              Mobile Number (Login ID)
             </Label>
             <Input
               data-ocid="admin.team.mobile.input"
@@ -4731,7 +5210,7 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
                 display: "block",
               }}
             >
-              4-Digit PIN
+              4-Digit Login PIN
             </Label>
             <Input
               data-ocid="admin.team.pin.input"
@@ -4747,10 +5226,42 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
               }}
             />
           </div>
+          <div>
+            <Label
+              style={{
+                color: "#cbd5e1",
+                fontSize: 12,
+                marginBottom: 6,
+                display: "block",
+              }}
+            >
+              Role
+            </Label>
+            <select
+              data-ocid="admin.team.role.select"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: 8,
+                background: "#0f172a",
+                border: "1px solid #334155",
+                color: "#f1f5f9",
+                fontSize: 14,
+              }}
+            >
+              <option value="Shop Staff">Shop Staff (POS & Counter)</option>
+              <option value="Bulk Printing Staff">
+                Bulk Printing Staff (B2B Orders)
+              </option>
+              <option value="Rider">Rider (Delivery Operations)</option>
+            </select>
+          </div>
         </div>
         <Button
           data-ocid="admin.team.add.primary_button"
-          onClick={handleAddRider}
+          onClick={handleAddMember}
           disabled={adding}
           style={{
             marginTop: 16,
@@ -4768,13 +5279,13 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
           ) : (
             <>
               <Users className="w-4 h-4 mr-2" />
-              Add Rider
+              Add Team Member
             </>
           )}
         </Button>
       </div>
 
-      {/* Riders Table */}
+      {/* Team Members Table */}
       <div
         style={{
           background: "#1e293b",
@@ -4790,7 +5301,7 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
           }}
         >
           <h3 style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 600 }}>
-            Current Riders ({riders.length})
+            Active Team Members ({members.length})
           </h3>
         </div>
         {loading ? (
@@ -4802,9 +5313,9 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
               className="w-8 h-8 animate-spin mx-auto mb-2"
               style={{ color: "#f59e0b" }}
             />
-            <p style={{ color: "#64748b", fontSize: 13 }}>Loading riders...</p>
+            <p style={{ color: "#64748b", fontSize: 13 }}>Loading team...</p>
           </div>
-        ) : riders.length === 0 ? (
+        ) : members.length === 0 ? (
           <div
             data-ocid="admin.team.empty_state"
             style={{ padding: 40, textAlign: "center" }}
@@ -4818,7 +5329,7 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
               }}
             />
             <p style={{ color: "#64748b", fontSize: 14 }}>
-              No riders added yet.
+              No team members added yet.
             </p>
           </div>
         ) : (
@@ -4828,7 +5339,7 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
           >
             <thead>
               <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                {["Name", "Mobile", "PIN", "Action"].map((h) => (
+                {["Name", "Mobile", "Role", "PIN", "Action"].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -4847,9 +5358,9 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
               </tr>
             </thead>
             <tbody>
-              {riders.map((rider, idx) => (
+              {members.map((member, idx) => (
                 <tr
-                  key={rider.mobile}
+                  key={member.mobile}
                   data-ocid={`admin.team.row.${idx + 1}`}
                   style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
                 >
@@ -4860,7 +5371,7 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
                       fontSize: 14,
                     }}
                   >
-                    {rider.name}
+                    {member.name}
                   </td>
                   <td
                     style={{
@@ -4869,7 +5380,10 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
                       fontSize: 14,
                     }}
                   >
-                    {rider.mobile}
+                    {member.mobile}
+                  </td>
+                  <td style={{ padding: "12px 20px" }}>
+                    <RoleBadge role={member.role} />
                   </td>
                   <td
                     style={{
@@ -4885,11 +5399,11 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
                       data-ocid={`admin.team.delete_button.${idx + 1}`}
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleRemoveRider(rider.mobile)}
-                      disabled={removing === rider.mobile}
+                      onClick={() => handleRemoveMember(member.mobile)}
+                      disabled={removing === member.mobile}
                       style={{ color: "#f87171", fontSize: 12 }}
                     >
-                      {removing === rider.mobile ? (
+                      {removing === member.mobile ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (
                         "Remove"
@@ -5192,6 +5706,547 @@ function WalletSection({ actor }: { actor: backendInterface | null }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// ─── B2B Leads Section ────────────────────────────────────────────────────────
+
+function B2BLeadsSection({ actor }: { actor: backendInterface | null }) {
+  const [quotes, setQuotes] = useState<TypesettingQuoteRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<bigint | null>(null);
+  const [quoteNotes, setQuoteNotes] = useState<Record<string, string>>({});
+  const [updatingId, setUpdatingId] = useState<bigint | null>(null);
+
+  function loadQuotes() {
+    if (!actor) return;
+    setLoading(true);
+    actor
+      .getAllTypesettingQuotes()
+      .then((data) => setQuotes(data))
+      .catch(() => toast.error("Failed to load B2B leads."))
+      .finally(() => setLoading(false));
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadQuotes is stable
+  useEffect(() => {
+    loadQuotes();
+  }, [actor]);
+
+  async function handleStatusUpdate(id: bigint, status: string, notes: string) {
+    if (!actor) return;
+    setUpdatingId(id);
+    const finalStatus = notes.trim()
+      ? `${status} | Notes: ${notes.trim()}`
+      : status;
+    try {
+      await actor.updateTypesettingQuoteStatus(id, { status: finalStatus });
+      toast.success(`Status updated: "${status}"`);
+      loadQuotes();
+    } catch {
+      toast.error("Failed to update status.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  function buildWhatsAppUrl(q: TypesettingQuoteRequest) {
+    const phone = q.phone.replace(/\D/g, "");
+    const number = phone.startsWith("91") ? phone : `91${phone}`;
+    const msg = encodeURIComponent(
+      `Hello ${q.name}, regarding your request for ${q.subject} Typesetting & Printing, our custom quote is [enter amount]. Please confirm to proceed. - Smart Online Service Center`,
+    );
+    return `https://wa.me/${number}?text=${msg}`;
+  }
+
+  function getStatusStyle(status: string): React.CSSProperties {
+    const s = status.split(" | Notes:")[0].trim();
+    if (s === "Quote Sent")
+      return {
+        background: "rgba(59,130,246,0.2)",
+        color: "#60a5fa",
+        border: "1px solid rgba(59,130,246,0.3)",
+      };
+    if (s === "Confirmed")
+      return {
+        background: "rgba(16,185,129,0.2)",
+        color: "#34d399",
+        border: "1px solid rgba(16,185,129,0.3)",
+      };
+    if (s === "Printing")
+      return {
+        background: "rgba(139,92,246,0.2)",
+        color: "#c4b5fd",
+        border: "1px solid rgba(139,92,246,0.3)",
+      };
+    // Pending Quote (default)
+    return {
+      background: "rgba(234,179,8,0.2)",
+      color: "#fbbf24",
+      border: "1px solid rgba(234,179,8,0.3)",
+    };
+  }
+
+  function getStatusLabel(status: string) {
+    return status.split(" | Notes:")[0].trim() || "Pending Quote";
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: 48, textAlign: "center" }}>
+        <Loader2
+          style={{
+            width: 28,
+            height: 28,
+            margin: "0 auto",
+            color: "#fbbf24",
+            animation: "spin 1s linear infinite",
+          }}
+        />
+      </div>
+    );
+  }
+
+  const pendingCount = quotes.filter(
+    (q) => !q.status || q.status === "Pending Quote",
+  ).length;
+
+  return (
+    <div style={{ padding: "32px 24px" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: "linear-gradient(135deg, #d97706, #f59e0b)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Building2 style={{ width: 22, height: 22, color: "#111" }} />
+        </div>
+        <div>
+          <h1
+            style={{ color: "white", fontWeight: 800, fontSize: 22, margin: 0 }}
+          >
+            B2B Leads &amp; Quotes
+          </h1>
+          <p
+            style={{
+              color: "rgba(255,255,255,0.4)",
+              fontSize: 13,
+              marginTop: 2,
+            }}
+          >
+            Coaching institute quote requests — dedicated high-value pipeline
+          </p>
+        </div>
+        {pendingCount > 0 && (
+          <span
+            style={{
+              marginLeft: "auto",
+              background: "rgba(234,179,8,0.2)",
+              color: "#fbbf24",
+              border: "1px solid rgba(234,179,8,0.4)",
+              borderRadius: 20,
+              padding: "4px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            {pendingCount} Pending
+          </span>
+        )}
+      </div>
+
+      {quotes.length === 0 ? (
+        <div
+          data-ocid="admin.b2b_leads.empty_state"
+          style={{
+            textAlign: "center",
+            padding: 60,
+            color: "rgba(255,255,255,0.3)",
+            background: "rgba(255,255,255,0.02)",
+            borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <Building2
+            style={{
+              width: 40,
+              height: 40,
+              margin: "0 auto 12px",
+              opacity: 0.3,
+            }}
+          />
+          <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+            No B2B leads yet
+          </p>
+          <p style={{ fontSize: 13 }}>
+            They will appear here when coaching institutes submit quote
+            requests.
+          </p>
+        </div>
+      ) : (
+        <div
+          style={{
+            background: "#111827",
+            borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.07)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Table Header */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 120px 160px 100px 130px 80px",
+              padding: "10px 16px",
+              background: "#1a2236",
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            {[
+              "Institute Name",
+              "Subject",
+              "Layout",
+              "Date",
+              "Status",
+              "Action",
+            ].map((h) => (
+              <span
+                key={h}
+                style={{
+                  color: "rgba(255,255,255,0.35)",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                }}
+              >
+                {h}
+              </span>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {quotes.map((q, idx) => {
+            const isOpen = expandedId === q.id;
+            const noteKey = String(q.id);
+            const rawLayout = q.format?.split(" | Logo:")[0] ?? q.format ?? "";
+            return (
+              <React.Fragment key={String(q.id)}>
+                <div
+                  data-ocid={`admin.b2b_leads.item.${idx + 1}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 120px 160px 100px 130px 80px",
+                    padding: "14px 16px",
+                    borderBottom: "1px solid rgba(255,255,255,0.05)",
+                    alignItems: "center",
+                    background: isOpen ? "rgba(234,179,8,0.03)" : "transparent",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        color: "white",
+                        fontWeight: 600,
+                        fontSize: 14,
+                      }}
+                    >
+                      {q.name}
+                    </div>
+                    <div
+                      style={{
+                        color: "rgba(255,255,255,0.4)",
+                        fontSize: 12,
+                        marginTop: 2,
+                      }}
+                    >
+                      +91 {q.phone}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      color: "rgba(255,255,255,0.75)",
+                      fontSize: 13,
+                    }}
+                  >
+                    {q.subject}
+                  </div>
+                  <div
+                    style={{
+                      color: "rgba(255,255,255,0.6)",
+                      fontSize: 12,
+                    }}
+                  >
+                    {rawLayout || "—"}
+                  </div>
+                  <div
+                    style={{
+                      color: "rgba(255,255,255,0.4)",
+                      fontSize: 12,
+                    }}
+                  >
+                    {new Date(
+                      Number(q.submittedAt) / 1_000_000,
+                    ).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        padding: "3px 10px",
+                        borderRadius: 20,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        ...getStatusStyle(q.status ?? ""),
+                      }}
+                    >
+                      {getStatusLabel(q.status ?? "")}
+                    </span>
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      data-ocid={`admin.b2b_leads.edit_button.${idx + 1}`}
+                      onClick={() => setExpandedId(isOpen ? null : q.id)}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: 8,
+                        border: "1px solid rgba(234,179,8,0.3)",
+                        background: isOpen
+                          ? "rgba(234,179,8,0.2)"
+                          : "rgba(234,179,8,0.08)",
+                        color: "#fbbf24",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {isOpen ? "Close" : "View"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded panel */}
+                {isOpen && (
+                  <div
+                    style={{
+                      padding: "20px 16px 24px",
+                      background: "rgba(234,179,8,0.03)",
+                      borderBottom: "1px solid rgba(255,255,255,0.07)",
+                      borderTop: "1px solid rgba(234,179,8,0.1)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 12,
+                        marginBottom: 20,
+                      }}
+                    >
+                      {[
+                        ["Institute", q.name],
+                        ["Contact (WhatsApp)", `+91 ${q.phone}`],
+                        ["Subject", q.subject],
+                        ["Layout", rawLayout],
+                        ["Language", q.language],
+                        [
+                          "Submitted",
+                          new Date(
+                            Number(q.submittedAt) / 1_000_000,
+                          ).toLocaleString("en-IN"),
+                        ],
+                      ].map(([label, val]) => (
+                        <div key={label}>
+                          <div
+                            style={{
+                              color: "rgba(255,255,255,0.35)",
+                              fontSize: 10,
+                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                              marginBottom: 3,
+                            }}
+                          >
+                            {label}
+                          </div>
+                          <div
+                            style={{
+                              color: "rgba(255,255,255,0.8)",
+                              fontSize: 13,
+                            }}
+                          >
+                            {val || "—"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Raw material link */}
+                    {q.fileUrl && (
+                      <div style={{ marginBottom: 16 }}>
+                        <a
+                          href={q.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "#818cf8",
+                            fontSize: 13,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          📎 View uploaded raw material / notes
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Quote Notes */}
+                    <div style={{ marginBottom: 16 }}>
+                      <label
+                        htmlFor={`quote-notes-${String(q.id)}`}
+                        style={{
+                          color: "rgba(255,255,255,0.5)",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                          display: "block",
+                          marginBottom: 6,
+                        }}
+                      >
+                        Quote Notes / Custom Amount
+                      </label>
+                      <textarea
+                        id={`quote-notes-${String(q.id)}`}
+                        data-ocid="admin.b2b_leads.textarea"
+                        value={quoteNotes[noteKey] ?? ""}
+                        onChange={(e) =>
+                          setQuoteNotes((prev) => ({
+                            ...prev,
+                            [noteKey]: e.target.value,
+                          }))
+                        }
+                        placeholder="e.g. ₹5,000 for 200 pages, delivery in 3 days..."
+                        rows={3}
+                        style={{
+                          width: "100%",
+                          background: "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          borderRadius: 10,
+                          padding: "10px 12px",
+                          color: "white",
+                          fontSize: 13,
+                          outline: "none",
+                          resize: "vertical",
+                          fontFamily: "inherit",
+                        }}
+                      />
+                    </div>
+
+                    {/* Action Row */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                      }}
+                    >
+                      {/* Status Select */}
+                      <select
+                        data-ocid="admin.b2b_leads.select"
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleStatusUpdate(
+                              q.id,
+                              e.target.value,
+                              quoteNotes[noteKey] ?? "",
+                            );
+                          }
+                        }}
+                        disabled={updatingId === q.id}
+                        style={{
+                          background: "rgba(255,255,255,0.07)",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          borderRadius: 8,
+                          padding: "8px 12px",
+                          color: "white",
+                          fontSize: 13,
+                          cursor: "pointer",
+                          outline: "none",
+                        }}
+                      >
+                        <option value="" disabled>
+                          Update Status
+                        </option>
+                        <option value="Pending Quote">Pending Quote</option>
+                        <option value="Quote Sent">Quote Sent</option>
+                        <option value="Confirmed">Confirmed</option>
+                        <option value="Printing">Printing</option>
+                      </select>
+
+                      {/* WhatsApp Button */}
+                      <a
+                        href={buildWhatsAppUrl(q)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-ocid="admin.b2b_leads.button"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "8px 16px",
+                          borderRadius: 8,
+                          background:
+                            "linear-gradient(135deg, #16a34a, #15803d)",
+                          color: "white",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          textDecoration: "none",
+                          boxShadow: "0 4px 12px rgba(22,163,74,0.3)",
+                        }}
+                      >
+                        <span style={{ fontSize: 16 }}>📱</span>
+                        Send Quote via WhatsApp
+                      </a>
+
+                      {updatingId === q.id && (
+                        <Loader2
+                          style={{
+                            width: 18,
+                            height: 18,
+                            color: "#fbbf24",
+                            animation: "spin 1s linear infinite",
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const { actor, isFetching } = useActor();
   const [isAdmin, setIsAdmin] = useState<boolean>(
@@ -5211,6 +6266,67 @@ export default function AdminDashboard() {
 
   const isMobile = windowWidth < 768;
 
+  async function seedServices() {
+    if (!actor) return;
+    try {
+      const existing = await (
+        actor as unknown as backendInterface
+      ).getAllCatalogItems();
+      const SERVICE_CATS = [
+        "Printing & Document",
+        "CSC & Govt Forms",
+        "Typing",
+        "Misc",
+      ];
+      const hasServices = existing.some((item) =>
+        SERVICE_CATS.includes(item.category),
+      );
+      if (hasServices) return;
+
+      const services = [
+        { name: "Printing (Single Sided)", category: "Printing & Document" },
+        { name: "Photocopy (Single Sided)", category: "Printing & Document" },
+        { name: "Photocopy (Double Sided)", category: "Printing & Document" },
+        { name: "Printing (Double Sided)", category: "Printing & Document" },
+        { name: "Color Printing (Normal)", category: "Printing & Document" },
+        { name: "Color Printing (Glossy)", category: "Printing & Document" },
+        { name: "PVC Card Printing", category: "Printing & Document" },
+        { name: "ID Card Printing", category: "Printing & Document" },
+        { name: "Normal Typing", category: "Typing" },
+        { name: "Complex Sci/Math Typing", category: "Typing" },
+        { name: "Document Correction", category: "Typing" },
+        { name: "Basic Resume", category: "Typing" },
+        { name: "Professional CV", category: "Typing" },
+        { name: "Resume Update", category: "Typing" },
+        { name: "Basic Form Fill-up", category: "CSC & Govt Forms" },
+        { name: "Complex Form Fill-up", category: "CSC & Govt Forms" },
+        { name: "Scholarship Form Fill-up", category: "CSC & Govt Forms" },
+        { name: "Admit Card / Result Print", category: "CSC & Govt Forms" },
+        { name: "Urgent Passport Size Photo", category: "Misc" },
+        { name: "Lamination (ID Size)", category: "Misc" },
+        { name: "Lamination (A4 Size)", category: "Misc" },
+        { name: "Spiral Binding", category: "Misc" },
+      ];
+
+      for (const svc of services) {
+        await (actor as unknown as backendInterface).addCatalogItem({
+          name: svc.name,
+          category: svc.category,
+          description: "",
+          price: "0",
+          stockStatus: "N/A",
+          requiredDocuments: "",
+          requiresPdfCalc: false,
+          mediaFiles: [],
+          mediaTypes: [],
+        });
+      }
+      toast.success("22 standard services seeded!");
+    } catch {
+      // silent fail — seeding is optional
+    }
+  }
+
   function loadCatalog() {
     if (!actor) return;
     setCatalogLoading(true);
@@ -5223,7 +6339,9 @@ export default function AdminDashboard() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadCatalog is stable
   useEffect(() => {
-    if (actor && !isFetching && isAdmin) loadCatalog();
+    if (actor && !isFetching && isAdmin) {
+      seedServices().then(() => loadCatalog());
+    }
   }, [actor, isFetching, isAdmin]);
 
   const navSectionLabels: Record<NavSection, string> = {
@@ -5236,6 +6354,7 @@ export default function AdminDashboard() {
     team: "Team & Access",
     wallet: "Customer Wallet",
     reviews: "Customer Reviews",
+    "b2b-leads": "B2B Leads & Quotes",
   };
 
   // ── View: Not logged in ──────────────────────────────────────────────────────
@@ -5404,6 +6523,16 @@ export default function AdminDashboard() {
             ocid="admin.reviews.tab"
             onClick={() => {
               setActiveSection("reviews");
+              setSidebarOpen(false);
+            }}
+          />
+          <NavItem
+            icon={Building2}
+            label="B2B Leads & Quotes"
+            active={activeSection === "b2b-leads"}
+            ocid="admin.b2b_leads.tab"
+            onClick={() => {
+              setActiveSection("b2b-leads");
               setSidebarOpen(false);
             }}
           />
@@ -5606,6 +6735,9 @@ export default function AdminDashboard() {
           )}
           {activeSection === "reviews" && (
             <ReviewsAdminSection actor={actor as unknown as backendInterface} />
+          )}
+          {activeSection === "b2b-leads" && (
+            <B2BLeadsSection actor={actor as unknown as backendInterface} />
           )}
         </main>
       </div>

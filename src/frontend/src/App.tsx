@@ -63,6 +63,8 @@ import WhatsAppFloatingButton from "./components/WhatsAppButton";
 import { useActor } from "./hooks/useActor";
 import { usePublishedCatalogItems } from "./hooks/useQueries";
 import AdminDashboard from "./pages/AdminDashboard";
+import BulkDashboard from "./pages/BulkDashboard";
+import BulkLoginPage from "./pages/BulkLoginPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import ItemDetailPage from "./pages/ItemDetailPage";
 import OrderSuccessPage from "./pages/OrderSuccessPage";
@@ -1437,6 +1439,8 @@ export default function App() {
           <Route path="/pos" element={<PosPage />} />
           <Route path="/pos-login" element={<PosLoginPage />} />
           <Route path="/portal" element={<TeamPortalPage />} />
+          <Route path="/bulk-dashboard" element={<BulkDashboard />} />
+          <Route path="/bulk-login" element={<BulkLoginPage />} />
           <Route
             path="/order-success/:orderId"
             element={<OrderSuccessPage />}

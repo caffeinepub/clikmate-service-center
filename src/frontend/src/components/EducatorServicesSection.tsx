@@ -8,11 +8,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, ChevronDown, FileText, Loader2 } from "lucide-react";
+import {
+  Award,
+  BookOpen,
+  CheckCircle,
+  ChevronDown,
+  FileText,
+  Loader2,
+  Zap,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { ExternalBlob } from "../backend";
 import { useActor } from "../hooks/useActor";
+
+const LANGUAGE_OPTIONS = [
+  { value: "English (Times New Roman)", label: "English (Times New Roman)" },
+  { value: "Hindi (Noto Serif)", label: "Hindi (Noto Serif)" },
+  { value: "Bilingual", label: "Bilingual (EN + HI)" },
+];
 
 export default function EducatorServicesSection() {
   const { actor } = useActor();
@@ -21,38 +35,56 @@ export default function EducatorServicesSection() {
   const [submitted, setSubmitted] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [instituteName, setInstituteName] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
   const [subject, setSubject] = useState("");
-  const [format, setFormat] = useState("");
-  const [language, setLanguage] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [layout, setLayout] = useState("");
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [rawFile, setRawFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const rawFileRef = useRef<HTMLInputElement>(null);
+  const logoFileRef = useRef<HTMLInputElement>(null);
+
+  function toggleLanguage(val: string) {
+    setLanguages((prev) =>
+      prev.includes(val) ? prev.filter((l) => l !== val) : [...prev, val],
+    );
+  }
+
+  function resetForm() {
+    setInstituteName("");
+    setContactNumber("");
+    setSubject("");
+    setLayout("");
+    setLanguages([]);
+    setRawFile(null);
+    setLogoFile(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) {
-      toast.error("Please enter your full name.");
+    if (!instituteName.trim()) {
+      toast.error("Please enter your Institute Name.");
       return;
     }
-    if (phone.length !== 10) {
-      toast.error("Please enter a valid 10-digit WhatsApp number.");
+    if (contactNumber.length !== 10) {
+      toast.error("Please enter a valid 10-digit contact number.");
       return;
     }
     if (!subject) {
       toast.error("Please select a subject.");
       return;
     }
-    if (!format) {
-      toast.error("Please select a format.");
+    if (!layout) {
+      toast.error("Please select a layout option.");
       return;
     }
-    if (!language) {
-      toast.error("Please select a language.");
+    if (languages.length === 0) {
+      toast.error("Please select at least one language option.");
       return;
     }
-    if (!file) {
-      toast.error("Please upload your document or notes.");
+    if (!rawFile) {
+      toast.error("Please upload your raw material (notes/Word doc).");
       return;
     }
     if (!actor) {
@@ -63,24 +95,38 @@ export default function EducatorServicesSection() {
     setSubmitting(true);
     setUploadProgress(0);
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      // Upload raw material
+      const bytes = new Uint8Array(await rawFile.arrayBuffer());
       const blob = ExternalBlob.fromBytes(bytes).withUploadProgress((pct) =>
-        setUploadProgress(pct),
+        setUploadProgress(Math.round(pct * 0.8)),
       );
-      // Upload and get URL
       const fileUrl = blob.getDirectURL();
-      // We need to trigger upload by getting bytes through blob
       await blob.getBytes();
+
+      // Upload logo if provided
+      let logoUrl = "";
+      if (logoFile) {
+        const logoBytes = new Uint8Array(await logoFile.arrayBuffer());
+        const logoBlob = ExternalBlob.fromBytes(logoBytes).withUploadProgress(
+          (pct) => setUploadProgress(80 + Math.round(pct * 0.2)),
+        );
+        logoUrl = logoBlob.getDirectURL();
+        await logoBlob.getBytes();
+      }
+
+      const langStr = languages.join(" / ");
+      const formatStr = logoUrl ? `${layout} | Logo: ${logoUrl}` : layout;
+
       await actor.submitTypesettingQuoteRequest({
-        name,
-        phone,
+        name: instituteName,
+        phone: contactNumber,
         subject,
-        format,
-        language,
+        format: formatStr,
+        language: langStr,
         fileUrl,
       });
       setSubmitted(true);
-      toast.success("Quote request sent!");
+      toast.success("Quote request sent! We'll contact you within 2 hours.");
     } catch (err) {
       console.error(err);
       toast.error(
@@ -93,106 +139,219 @@ export default function EducatorServicesSection() {
   }
 
   return (
-    <section className="py-20 bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 relative overflow-hidden">
-      {/* Decorative blobs */}
+    <section
+      className="py-24 relative overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(160deg, #0a0f1e 0%, #0d1631 50%, #0f1a2e 100%)",
+      }}
+    >
+      {/* Decorative orbs */}
       <div
-        className="absolute top-0 right-0 w-96 h-96 rounded-full pointer-events-none"
+        className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full pointer-events-none"
         style={{
-          background: "oklch(0.7 0.15 280)",
-          opacity: 0.06,
-          transform: "translate(40%, -40%)",
+          background:
+            "radial-gradient(circle, rgba(234,179,8,0.08) 0%, transparent 70%)",
+          transform: "translate(30%, -30%)",
         }}
       />
       <div
-        className="absolute bottom-0 left-0 w-72 h-72 rounded-full pointer-events-none"
+        className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full pointer-events-none"
         style={{
-          background: "oklch(0.65 0.2 260)",
-          opacity: 0.05,
+          background:
+            "radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)",
           transform: "translate(-30%, 30%)",
         }}
       />
 
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="text-center mb-12">
-          <span className="inline-block blue-bg text-white text-xs font-semibold px-3 py-1 rounded-full mb-4">
-            For Educators
-          </span>
-          <h2 className="text-3xl md:text-4xl font-bold blue-text">
-            Premium Educator Services
+        <div className="text-center mb-14">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <span
+              className="text-xs font-bold px-3 py-1 rounded-full tracking-widest uppercase"
+              style={{
+                background: "rgba(234,179,8,0.15)",
+                color: "#fbbf24",
+                border: "1px solid rgba(234,179,8,0.3)",
+              }}
+            >
+              🏛️ For Coaching Institutes &amp; Educators
+            </span>
+          </div>
+          <h2
+            className="text-4xl md:text-5xl font-extrabold mb-4"
+            style={{ color: "white", letterSpacing: "-0.02em" }}
+          >
+            Premium Educator <span style={{ color: "#fbbf24" }}>Services</span>
           </h2>
-          <p className="text-gray-500 mt-3 text-base max-w-xl mx-auto">
-            Specialized academic services for teachers &amp; coaching
-            institutes. Professional quality, bilingual support.
+          <p
+            className="text-base max-w-xl mx-auto"
+            style={{ color: "rgba(255,255,255,0.5)" }}
+          >
+            High-quality bulk printing &amp; expert typesetting for coaching
+            centers, schools &amp; educational institutes in Raipur.
           </p>
+
+          {/* B2B Partner Program Badge */}
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <div
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full"
+              style={{
+                background: "linear-gradient(135deg, #78350f, #92400e)",
+                border: "1px solid rgba(234,179,8,0.5)",
+                boxShadow: "0 0 20px rgba(234,179,8,0.15)",
+              }}
+            >
+              <Award style={{ width: 16, height: 16, color: "#fbbf24" }} />
+              <span
+                style={{
+                  color: "#fde68a",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  letterSpacing: "0.05em",
+                }}
+              >
+                B2B Partner Program
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Feature Card */}
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-purple-100">
+        {/* Quick Feature Pills */}
+        <div className="flex flex-wrap justify-center gap-3 mb-10">
+          {[
+            { icon: "📚", text: "Bilingual Hindi & English" },
+            { icon: "🔢", text: "LaTeX Math Formulas" },
+            { icon: "🏛️", text: "Custom Institute Branding" },
+            { icon: "⚡", text: "24–48 Hour Delivery" },
+            { icon: "📦", text: "Bulk Printing Discounts" },
+          ].map((f) => (
+            <span
+              key={f.text}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                color: "rgba(255,255,255,0.7)",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <span>{f.icon}</span> {f.text}
+            </span>
+          ))}
+        </div>
+
+        {/* Main B2B Feature Card */}
+        <div
+          className="rounded-3xl overflow-hidden"
+          style={{
+            background: "linear-gradient(145deg, #141e3c, #1a2550)",
+            border: "1px solid rgba(234,179,8,0.25)",
+            boxShadow:
+              "0 25px 80px rgba(0,0,0,0.5), 0 0 40px rgba(234,179,8,0.05)",
+          }}
+        >
           {/* Card Header */}
           <div
-            className="px-8 py-6 flex items-start gap-5"
+            className="px-8 py-7 flex items-start gap-5"
             style={{
               background:
-                "linear-gradient(135deg, oklch(0.2 0.08 260), oklch(0.25 0.12 280))",
+                "linear-gradient(135deg, rgba(234,179,8,0.08) 0%, rgba(99,102,241,0.08) 100%)",
+              borderBottom: "1px solid rgba(255,255,255,0.07)",
             }}
           >
-            <div className="w-14 h-14 rounded-2xl yellow-bg flex items-center justify-center shrink-0">
-              <FileText className="w-7 h-7 text-gray-900" />
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0"
+              style={{
+                background: "linear-gradient(135deg, #d97706, #f59e0b)",
+                boxShadow: "0 8px 24px rgba(234,179,8,0.3)",
+              }}
+            >
+              <BookOpen className="w-8 h-8" style={{ color: "#1a1a1a" }} />
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center flex-wrap gap-2 mb-2">
                 <span
-                  className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                  className="text-xs font-bold px-2.5 py-0.5 rounded-full"
                   style={{
                     background: "rgba(234,179,8,0.2)",
                     color: "#fbbf24",
+                    border: "1px solid rgba(234,179,8,0.3)",
                   }}
                 >
-                  Premium Service
+                  🏆 Premium B2B Service
+                </span>
+                <span
+                  className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                  style={{
+                    background: "rgba(99,102,241,0.2)",
+                    color: "#a5b4fc",
+                  }}
+                >
+                  Custom Quote
                 </span>
               </div>
-              <h3 className="text-xl font-bold text-white">
-                Professional Question Paper Typesetting
+              <h3
+                className="text-2xl font-bold"
+                style={{ color: "white", letterSpacing: "-0.01em" }}
+              >
+                Premium Question Paper Design &amp; Bulk Printing
               </h3>
-              <p className="text-blue-200 text-sm mt-1">
-                Bilingual / LaTeX • Exam-Ready Quality • Delivered in 24–48 hrs
+              <p
+                className="text-sm mt-1.5"
+                style={{ color: "rgba(255,255,255,0.5)" }}
+              >
+                For Coaching Institutes · Bilingual / LaTeX · Exam-Ready Quality
               </p>
-            </div>
-            <div className="flex flex-wrap gap-2 shrink-0 items-start">
-              {["Physics", "Math", "Bio", "Chem"].map((sub) => (
-                <span
-                  key={sub}
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{
-                    background: "rgba(255,255,255,0.1)",
-                    color: "rgba(255,255,255,0.7)",
-                  }}
-                >
-                  {sub}
-                </span>
-              ))}
             </div>
           </div>
 
-          {/* Features List */}
-          <div className="px-8 py-5 flex flex-wrap gap-4 border-b border-gray-100">
+          {/* Features Grid */}
+          <div className="px-8 py-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
               "Hindi & English bilingual support",
               "LaTeX & Word doc input accepted",
               "Two-column / single-column format",
               "Handwritten notes accepted",
-              "Custom header / institute branding",
-              "Quick 24-48hr turnaround",
+              "Custom institute header/logo",
+              "Bulk order discounts available",
             ].map((feat) => (
               <div
                 key={feat}
-                className="flex items-center gap-2 text-sm text-gray-600"
+                className="flex items-center gap-2 text-xs"
+                style={{ color: "rgba(255,255,255,0.6)" }}
               >
-                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                <CheckCircle
+                  className="w-3.5 h-3.5 shrink-0"
+                  style={{ color: "#34d399" }}
+                />
                 {feat}
               </div>
             ))}
+          </div>
+
+          {/* LaTeX Feature Highlight Box */}
+          <div className="px-8 pb-2">
+            <div
+              className="flex items-start gap-3 rounded-2xl px-5 py-4"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))",
+                border: "1px solid rgba(99,102,241,0.3)",
+              }}
+            >
+              <Zap
+                className="w-5 h-5 mt-0.5 shrink-0"
+                style={{ color: "#818cf8" }}
+              />
+              <p className="text-sm" style={{ color: "#c7d2fe" }}>
+                <strong style={{ color: "#a5b4fc" }}>
+                  ⚡ Expert LaTeX Typesetting
+                </strong>{" "}
+                — Crisp mathematical formulas, perfect formatting, and
+                error-free numbering &amp; marks distribution.
+              </p>
+            </div>
           </div>
 
           {/* Expand Toggle */}
@@ -200,15 +359,22 @@ export default function EducatorServicesSection() {
             type="button"
             data-ocid="educator.form.toggle"
             onClick={() => setExpanded((v) => !v)}
-            className="w-full flex items-center justify-between px-8 py-4 hover:bg-gray-50 transition-colors text-left"
+            className="w-full flex items-center justify-between px-8 py-5 transition-colors text-left"
+            style={{
+              borderTop: "1px solid rgba(255,255,255,0.07)",
+              color: expanded ? "#fbbf24" : "rgba(255,255,255,0.7)",
+              background: expanded
+                ? "rgba(234,179,8,0.05)"
+                : "rgba(255,255,255,0.02)",
+            }}
           >
-            <span className="font-semibold blue-text text-sm">
+            <span className="font-semibold text-sm">
               {expanded
-                ? "Hide Order Form"
-                : "📋 Request Custom Quote — Fill Form"}
+                ? "— Hide Request Form"
+                : "📋 Request Custom Quote — Fill Details"}
             </span>
             <ChevronDown
-              className={`w-5 h-5 blue-text transition-transform ${
+              className={`w-5 h-5 transition-transform ${
                 expanded ? "rotate-180" : ""
               }`}
             />
@@ -216,32 +382,45 @@ export default function EducatorServicesSection() {
 
           {/* Expandable Form */}
           {expanded && (
-            <div className="px-8 pb-8">
+            <div className="px-8 pb-10 pt-2">
               {submitted ? (
                 <div
                   data-ocid="educator.form.success_state"
-                  className="flex flex-col items-center justify-center py-10 text-center"
+                  className="flex flex-col items-center justify-center py-12 text-center"
                 >
-                  <CheckCircle className="w-14 h-14 text-green-500 mb-4" />
-                  <h3 className="text-xl font-bold blue-text mb-2">
-                    Quote Request Sent!
+                  <div
+                    className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
+                    style={{ background: "rgba(16,185,129,0.15)" }}
+                  >
+                    <CheckCircle
+                      className="w-10 h-10"
+                      style={{ color: "#34d399" }}
+                    />
+                  </div>
+                  <h3
+                    className="text-2xl font-bold mb-2"
+                    style={{ color: "white" }}
+                  >
+                    Quote Request Sent! 🎉
                   </h3>
-                  <p className="text-gray-500 max-w-sm">
-                    Your quote request has been sent! We&apos;ll contact you on
-                    WhatsApp within <strong>2 hours</strong>.
+                  <p
+                    className="max-w-sm text-sm"
+                    style={{ color: "rgba(255,255,255,0.5)" }}
+                  >
+                    Your request has been flagged as a{" "}
+                    <strong style={{ color: "#fbbf24" }}>B2B Lead</strong> in
+                    our Admin panel. We&apos;ll contact you on WhatsApp within{" "}
+                    <strong style={{ color: "white" }}>2 hours</strong> with a
+                    custom price estimate.
                   </p>
                   <button
                     type="button"
                     onClick={() => {
                       setSubmitted(false);
-                      setName("");
-                      setPhone("");
-                      setSubject("");
-                      setFormat("");
-                      setLanguage("");
-                      setFile(null);
+                      resetForm();
                     }}
-                    className="mt-6 text-sm blue-text underline"
+                    className="mt-6 text-sm underline"
+                    style={{ color: "#fbbf24" }}
                   >
                     Submit another request
                   </button>
@@ -249,188 +428,366 @@ export default function EducatorServicesSection() {
               ) : (
                 <form
                   onSubmit={handleSubmit}
-                  className="flex flex-col gap-5 pt-2"
+                  className="flex flex-col gap-6 pt-4"
                 >
+                  {/* Row 1: Institute Name + Contact */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    {/* Full Name */}
                     <div>
                       <Label
-                        htmlFor="edu-name"
-                        className="text-sm font-semibold blue-text mb-1.5 block"
+                        htmlFor="edu-institute"
+                        className="text-xs font-semibold mb-1.5 block uppercase tracking-wider"
+                        style={{ color: "rgba(255,255,255,0.5)" }}
                       >
-                        Teacher / Institute Name *
+                        Institute Name *
                       </Label>
                       <Input
-                        id="edu-name"
+                        id="edu-institute"
                         data-ocid="educator.name.input"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g. Shri Ram Coaching, Raipur"
-                        className="rounded-xl border-gray-200"
+                        value={instituteName}
+                        onChange={(e) => setInstituteName(e.target.value)}
+                        placeholder="e.g. Shri Ram Coaching Center"
+                        style={{
+                          background: "rgba(255,255,255,0.06)",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          color: "white",
+                          borderRadius: 10,
+                        }}
+                        className="placeholder:text-gray-600"
                       />
                     </div>
-                    {/* Phone */}
                     <div>
                       <Label
-                        htmlFor="edu-phone"
-                        className="text-sm font-semibold blue-text mb-1.5 block"
+                        htmlFor="edu-contact"
+                        className="text-xs font-semibold mb-1.5 block uppercase tracking-wider"
+                        style={{ color: "rgba(255,255,255,0.5)" }}
                       >
-                        WhatsApp Number *
+                        Contact Number (WhatsApp) *
                       </Label>
-                      <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                        <span className="px-3 py-2.5 bg-gray-50 text-gray-500 text-sm border-r border-gray-200">
+                      <div
+                        className="flex items-center rounded-xl overflow-hidden"
+                        style={{
+                          background: "rgba(255,255,255,0.06)",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                        }}
+                      >
+                        <span
+                          className="px-3 py-2.5 text-sm border-r"
+                          style={{
+                            color: "rgba(255,255,255,0.4)",
+                            borderColor: "rgba(255,255,255,0.12)",
+                          }}
+                        >
                           +91
                         </span>
                         <input
-                          id="edu-phone"
+                          id="edu-contact"
                           data-ocid="educator.phone.input"
                           type="tel"
-                          value={phone}
+                          value={contactNumber}
                           onChange={(e) =>
-                            setPhone(
+                            setContactNumber(
                               e.target.value.replace(/\D/g, "").slice(0, 10),
                             )
                           }
                           placeholder="9876543210"
-                          className="flex-1 px-3 py-2.5 text-sm outline-none bg-white"
+                          className="flex-1 px-3 py-2.5 text-sm outline-none"
+                          style={{
+                            background: "transparent",
+                            color: "white",
+                          }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                    {/* Subject */}
+                  {/* Row 2: Subject + Layout */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
-                      <Label className="text-sm font-semibold blue-text mb-1.5 block">
-                        Subject *
+                      <Label
+                        className="text-xs font-semibold mb-1.5 block uppercase tracking-wider"
+                        style={{ color: "rgba(255,255,255,0.5)" }}
+                      >
+                        Subject Category *
                       </Label>
                       <Select value={subject} onValueChange={setSubject}>
                         <SelectTrigger
                           data-ocid="educator.subject.select"
-                          className="rounded-xl border-gray-200"
+                          style={{
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            color: subject ? "white" : "rgba(255,255,255,0.35)",
+                            borderRadius: 10,
+                          }}
                         >
                           <SelectValue placeholder="Select subject" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Physics">Physics</SelectItem>
+                          <SelectItem value="Chemistry">Chemistry</SelectItem>
                           <SelectItem value="Mathematics">
                             Mathematics
                           </SelectItem>
                           <SelectItem value="Biology">Biology</SelectItem>
-                          <SelectItem value="Chemistry">Chemistry</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-
-                    {/* Format */}
                     <div>
-                      <Label className="text-sm font-semibold blue-text mb-1.5 block">
-                        Format *
+                      <Label
+                        className="text-xs font-semibold mb-1.5 block uppercase tracking-wider"
+                        style={{ color: "rgba(255,255,255,0.5)" }}
+                      >
+                        Layout Options *
                       </Label>
-                      <Select value={format} onValueChange={setFormat}>
+                      <Select value={layout} onValueChange={setLayout}>
                         <SelectTrigger
                           data-ocid="educator.format.select"
-                          className="rounded-xl border-gray-200"
+                          style={{
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            color: layout ? "white" : "rgba(255,255,255,0.35)",
+                            borderRadius: 10,
+                          }}
                         >
-                          <SelectValue placeholder="Select format" />
+                          <SelectValue placeholder="Select layout" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Two-Column">Two-Column</SelectItem>
-                          <SelectItem value="Single-Column">
-                            Single-Column
+                          <SelectItem value="Single Column">
+                            Single Column
                           </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Language */}
-                    <div>
-                      <Label className="text-sm font-semibold blue-text mb-1.5 block">
-                        Language *
-                      </Label>
-                      <Select value={language} onValueChange={setLanguage}>
-                        <SelectTrigger
-                          data-ocid="educator.language.select"
-                          className="rounded-xl border-gray-200"
-                        >
-                          <SelectValue placeholder="Select language" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="English">English</SelectItem>
-                          <SelectItem value="Hindi (Noto Serif)">
-                            Hindi (Noto Serif)
+                          <SelectItem value="Two-Column with Vertical Line">
+                            Two-Column with Vertical Line
                           </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  {/* File Upload */}
+                  {/* Language Checkboxes */}
                   <div>
-                    <Label className="text-sm font-semibold blue-text mb-1.5 block">
-                      Upload Notes / Document *
-                    </Label>
-                    <button
-                      type="button"
-                      className={`w-full border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
-                        file
-                          ? "border-green-400 bg-green-50"
-                          : "border-gray-200 hover:border-blue-300 hover:bg-blue-50/30"
-                      }`}
-                      onClick={() => fileInputRef.current?.click()}
+                    <Label
+                      className="text-xs font-semibold mb-3 block uppercase tracking-wider"
+                      style={{ color: "rgba(255,255,255,0.5)" }}
                     >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) setFile(f);
-                        }}
-                        className="hidden"
-                        data-ocid="educator.file.upload_button"
-                      />
-                      {file ? (
-                        <div className="flex items-center justify-center gap-3">
-                          <FileText className="w-6 h-6 text-green-500" />
-                          <span className="text-sm font-medium text-gray-700">
-                            {file.name}
-                          </span>
+                      Language &amp; Typesetting *
+                    </Label>
+                    <div className="flex flex-wrap gap-3">
+                      {LANGUAGE_OPTIONS.map((opt) => {
+                        const checked = languages.includes(opt.value);
+                        return (
                           <button
+                            key={opt.value}
                             type="button"
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              setFile(null);
+                            data-ocid="educator.language.toggle"
+                            onClick={() => toggleLanguage(opt.value)}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+                            style={{
+                              background: checked
+                                ? "rgba(234,179,8,0.2)"
+                                : "rgba(255,255,255,0.05)",
+                              border: checked
+                                ? "1px solid rgba(234,179,8,0.5)"
+                                : "1px solid rgba(255,255,255,0.12)",
+                              color: checked
+                                ? "#fde68a"
+                                : "rgba(255,255,255,0.6)",
                             }}
-                            className="text-gray-400 hover:text-red-500 transition-colors"
                           >
-                            ✕
+                            <span
+                              className="w-4 h-4 rounded flex items-center justify-center shrink-0"
+                              style={{
+                                background: checked
+                                  ? "#d97706"
+                                  : "rgba(255,255,255,0.1)",
+                                border: checked
+                                  ? "none"
+                                  : "1px solid rgba(255,255,255,0.2)",
+                              }}
+                            >
+                              {checked && (
+                                <CheckCircle
+                                  className="w-3 h-3"
+                                  style={{ color: "white" }}
+                                />
+                              )}
+                            </span>
+                            {opt.label}
                           </button>
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">
-                            📎 Click to upload — PDF, DOC, DOCX, JPG accepted
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            Handwritten notes, Word docs, or scanned images
-                          </p>
-                        </div>
-                      )}
-                    </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* File Uploads */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {/* Raw Material */}
+                    <div>
+                      <Label
+                        className="text-xs font-semibold mb-1.5 block uppercase tracking-wider"
+                        style={{ color: "rgba(255,255,255,0.5)" }}
+                      >
+                        Upload Raw Material *
+                      </Label>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl p-4 text-center cursor-pointer transition-all"
+                        style={{
+                          border: rawFile
+                            ? "2px solid rgba(52,211,153,0.5)"
+                            : "2px dashed rgba(255,255,255,0.15)",
+                          background: rawFile
+                            ? "rgba(52,211,153,0.05)"
+                            : "rgba(255,255,255,0.02)",
+                        }}
+                        onClick={() => rawFileRef.current?.click()}
+                      >
+                        <input
+                          ref={rawFileRef}
+                          type="file"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) setRawFile(f);
+                          }}
+                          className="hidden"
+                          data-ocid="educator.file.upload_button"
+                        />
+                        {rawFile ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <FileText
+                              className="w-5 h-5"
+                              style={{ color: "#34d399" }}
+                            />
+                            <span
+                              className="text-xs font-medium truncate max-w-[150px]"
+                              style={{ color: "rgba(255,255,255,0.8)" }}
+                            >
+                              {rawFile.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                setRawFile(null);
+                              }}
+                              style={{ color: "rgba(255,255,255,0.35)" }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div>
+                            <p
+                              className="text-xs font-medium"
+                              style={{ color: "rgba(255,255,255,0.4)" }}
+                            >
+                              📎 Handwritten notes, Word docs, PDFs
+                            </p>
+                          </div>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Institute Logo */}
+                    <div>
+                      <Label
+                        className="text-xs font-semibold mb-1.5 block uppercase tracking-wider"
+                        style={{ color: "rgba(255,255,255,0.5)" }}
+                      >
+                        Institute Logo{" "}
+                        <span
+                          style={{
+                            color: "rgba(255,255,255,0.3)",
+                            fontWeight: 400,
+                            textTransform: "none",
+                            letterSpacing: 0,
+                            fontSize: 10,
+                          }}
+                        >
+                          (Optional — added to every page header)
+                        </span>
+                      </Label>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl p-4 text-center cursor-pointer transition-all"
+                        style={{
+                          border: logoFile
+                            ? "2px solid rgba(234,179,8,0.5)"
+                            : "2px dashed rgba(255,255,255,0.15)",
+                          background: logoFile
+                            ? "rgba(234,179,8,0.05)"
+                            : "rgba(255,255,255,0.02)",
+                        }}
+                        onClick={() => logoFileRef.current?.click()}
+                      >
+                        <input
+                          ref={logoFileRef}
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.svg"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) setLogoFile(f);
+                          }}
+                          className="hidden"
+                          data-ocid="educator.logo.upload_button"
+                        />
+                        {logoFile ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <Award
+                              className="w-5 h-5"
+                              style={{ color: "#fbbf24" }}
+                            />
+                            <span
+                              className="text-xs font-medium truncate max-w-[150px]"
+                              style={{ color: "rgba(255,255,255,0.8)" }}
+                            >
+                              {logoFile.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                setLogoFile(null);
+                              }}
+                              style={{ color: "rgba(255,255,255,0.35)" }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div>
+                            <p
+                              className="text-xs font-medium"
+                              style={{ color: "rgba(255,255,255,0.4)" }}
+                            >
+                              🏛️ Upload PNG / JPG logo
+                            </p>
+                          </div>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Upload progress */}
                   {submitting && uploadProgress > 0 && (
                     <div>
-                      <div className="flex justify-between text-xs text-gray-500 mb-1">
-                        <span>Uploading...</span>
+                      <div
+                        className="flex justify-between text-xs mb-1"
+                        style={{ color: "rgba(255,255,255,0.4)" }}
+                      >
+                        <span>Uploading files...</span>
                         <span>{uploadProgress}%</span>
                       </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div
+                        className="w-full rounded-full h-1.5"
+                        style={{ background: "rgba(255,255,255,0.1)" }}
+                      >
                         <div
-                          className="blue-bg h-2 rounded-full transition-all"
-                          style={{ width: `${uploadProgress}%` }}
+                          className="h-1.5 rounded-full transition-all"
+                          style={{
+                            width: `${uploadProgress}%`,
+                            background:
+                              "linear-gradient(90deg, #d97706, #fbbf24)",
+                          }}
                         />
                       </div>
                     </div>
@@ -440,21 +797,33 @@ export default function EducatorServicesSection() {
                     type="submit"
                     data-ocid="educator.form.submit_button"
                     disabled={submitting}
-                    className="yellow-bg text-gray-900 font-bold rounded-xl py-4 hover:opacity-90 border-0 text-base shadow-lg"
+                    className="font-bold rounded-xl py-6 text-base border-0"
+                    style={{
+                      background: submitting
+                        ? "rgba(234,179,8,0.4)"
+                        : "linear-gradient(135deg, #d97706, #f59e0b)",
+                      color: "#111",
+                      boxShadow: submitting
+                        ? "none"
+                        : "0 8px 24px rgba(234,179,8,0.3)",
+                    }}
                   >
                     {submitting ? (
                       <>
                         <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Sending Request...
+                        Sending Quote Request...
                       </>
                     ) : (
                       "📩 Request Custom Quote"
                     )}
                   </Button>
 
-                  <p className="text-xs text-center text-gray-400">
-                    We&apos;ll analyze your requirements and send a detailed
-                    quote on WhatsApp within 2 hours.
+                  <p
+                    className="text-xs text-center"
+                    style={{ color: "rgba(255,255,255,0.3)" }}
+                  >
+                    Our team will analyze your requirements and send a detailed
+                    custom quote on WhatsApp within 2 hours.
                   </p>
                 </form>
               )}
