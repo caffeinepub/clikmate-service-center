@@ -1,30 +1,52 @@
 # ClikMate Service Center
 
 ## Current State
-The 'Live Dashboard' tab in AdminDashboard.tsx shows a `DashboardSection` component that displays Catalog stats (Items Published, Total Catalog, Categories, Hidden Items) and a "Recent Catalog Activity" list. It has no order data, no revenue metrics, and no print functionality.
+AdminDashboard.tsx (9381 lines) contains multiple form submission handlers that follow a blocking pattern: `await backend call → then update UI`. If the backend is slow or fails, the table never updates. Key affected handlers:
+
+- `handleAddMember` in `TeamAccessSection` (line ~5583): calls `addTeamMember`, then calls `loadMembers()` to refresh. No optimistic update.
+- `handleAddIncome` in AccountsSection (line ~7160): calls `addManualIncome`, then `loadData()`
+- `handleAddExpense` (line ~7197): calls `addExpense`, then `loadData()`
+- Catalog `handleSave` in modal (line ~566): calls `addCatalogItem` / `updateCatalogItem`, then `onSaved()`
 
 ## Requested Changes (Diff)
 
 ### Add
-- 4 clickable operational stat cards: New Orders (Pending), Ready for Print/Processing, Out for Delivery/Pickup, Today's Revenue
-- Dynamic data table below the cards showing orders, filterable by card click
-- Table columns: Order ID, Customer Name, Service Detail, Amount, Status, Action
-- Action column with quick status-change buttons (Accept Order, Mark as Ready, etc.) based on current order status
-- "🖨️ Print Report (A4)" primary button at top right
-- @media print CSS: hide sidebar/dark background, show clean B&W header "ClikMate - Daily Operations Report [Date]", A4-optimized table
+- Optimistic update logic to all key form submissions: immediately mutate local state, fire backend async, revert + show red error toast on failure
+- Explicit error messaging: catch block must extract `err.message` and display it in toast (not generic text)
 
 ### Modify
-- Replace existing `DashboardSection` component (catalog stats) with new `LiveOperationalDashboard` component
+- `handleAddMember`: Add optimistic member to `members` state immediately with `{ name, mobile, pin, role }`. Fire `addTeamMember` in background. On success: do nothing extra (already in state). On failure: revert by removing the optimistic entry from `members`, show red error toast with exact error message. Clear form and show success toast immediately after optimistic add (not after await).
+- `handleAddIncome`: Add optimistic income entry to `incomes` state with a temporary negative BigInt ID. Fire `addManualIncome` in background. On failure: revert + show red error toast.
+- `handleAddExpense`: Same pattern — add optimistic expense entry to `expenses` with temp negative BigInt ID. Fire `addExpense` in background. On failure: revert + show red toast.
+- Catalog `handleSave` (add mode only): Add optimistic item with temp BigInt ID. On failure: revert + show error.
 
 ### Remove
-- Old catalog-stats-based dashboard content from the Live Dashboard tab
+- `await loadMembers()` / `await loadData()` / `onSaved()` calls that trigger full refresh AFTER submission (replaced by optimistic direct state mutation)
 
 ## Implementation Plan
-1. Create `LiveOperationalDashboard` component inside AdminDashboard.tsx
-2. Fetch all orders using `getAllShopOrders()` on mount
-3. Compute 4 metrics from order data: pending count, processing count, out-for-delivery count, today's revenue (sum of today's completed/all orders' totalAmount)
-4. Track `activeFilter` state: null | 'pending' | 'processing' | 'delivery' | 'revenue'
-5. Filter displayed orders based on activeFilter
-6. Each row: show first item name as Service Detail, quick action button that calls `updateShopOrderStatus`
-7. Print button calls `window.print()`, inject `<style id="print-styles">` with @media print rules hiding sidebar and dark bg, showing clean header
-8. Replace `DashboardSection` usage in the Live Dashboard tab with `LiveOperationalDashboard`
+1. In `TeamAccessSection.handleAddMember`:
+   - Build `optimisticMember = { name: name.trim(), mobile, pin, role }`
+   - Call `setMembers(prev => [optimisticMember, ...prev])` immediately
+   - Clear form fields and show success toast immediately
+   - Fire backend call WITHOUT await (fire-and-forget with catch)
+   - In catch: `setMembers(prev => prev.filter(m => m.mobile !== mobile))` + `toast.error('Failed: ' + msg)`
+   - Remove the final `await loadMembers()` from success path
+
+2. In `handleAddExpense` (add mode):
+   - Build `optimisticExpense` with `id: BigInt(-Date.now())`, fields from form
+   - `setExpenses(prev => [optimisticExpense, ...prev])` immediately
+   - Close modal, clear form, show success toast immediately
+   - Fire `addExpense` without await
+   - On error: revert via filter on temp id + show exact error
+
+3. In `handleAddIncome` (add mode):
+   - Same pattern as expense
+
+4. In catalog `handleSave` (non-edit path):
+   - Build optimistic CatalogItem with temp BigInt ID
+   - Call `onSaved()` callback immediately (so parent refreshes or adds to list)
+   - Fire backend without await
+   - On error: show error toast (parent will re-fetch to correct state)
+   - NOTE: This one is more complex due to blob uploads — only apply optimistic pattern AFTER file uploads complete; the optimistic part is just the state update after backend prepare
+
+5. In `EducatorServicesSection.handleSubmit` (B2B form): already works — file is saved as filename string. No changes needed unless testing shows issues.

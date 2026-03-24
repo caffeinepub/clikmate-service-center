@@ -33,7 +33,6 @@ export default function EducatorServicesSection() {
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
 
   const [instituteName, setInstituteName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
@@ -93,26 +92,10 @@ export default function EducatorServicesSection() {
     }
 
     setSubmitting(true);
-    setUploadProgress(0);
     try {
-      // Upload raw material
-      const bytes = new Uint8Array(await rawFile.arrayBuffer());
-      const blob = ExternalBlob.fromBytes(bytes).withUploadProgress((pct) =>
-        setUploadProgress(Math.round(pct * 0.8)),
-      );
-      const fileUrl = blob.getDirectURL();
-      await blob.getBytes();
-
-      // Upload logo if provided
-      let logoUrl = "";
-      if (logoFile) {
-        const logoBytes = new Uint8Array(await logoFile.arrayBuffer());
-        const logoBlob = ExternalBlob.fromBytes(logoBytes).withUploadProgress(
-          (pct) => setUploadProgress(80 + Math.round(pct * 0.2)),
-        );
-        logoUrl = logoBlob.getDirectURL();
-        await logoBlob.getBytes();
-      }
+      // Mock file upload: save filename as string instead of raw File object
+      const fileUrl = rawFile.name;
+      const logoUrl = logoFile ? logoFile.name : "";
 
       const langStr = languages.join(" / ");
       const formatStr = logoUrl ? `${layout} | Logo: ${logoUrl}` : layout;
@@ -126,15 +109,14 @@ export default function EducatorServicesSection() {
         fileUrl,
       });
       setSubmitted(true);
+      resetForm();
       toast.success("Quote request sent! We'll contact you within 2 hours.");
     } catch (err) {
-      console.error(err);
-      toast.error(
-        "Submission failed. Please try again or contact us on WhatsApp.",
-      );
+      console.error("B2B Submission Error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Submission failed: ${msg}`);
     } finally {
       setSubmitting(false);
-      setUploadProgress(0);
     }
   }
 
@@ -766,32 +748,6 @@ export default function EducatorServicesSection() {
                       </button>
                     </div>
                   </div>
-
-                  {/* Upload progress */}
-                  {submitting && uploadProgress > 0 && (
-                    <div>
-                      <div
-                        className="flex justify-between text-xs mb-1"
-                        style={{ color: "rgba(255,255,255,0.4)" }}
-                      >
-                        <span>Uploading files...</span>
-                        <span>{uploadProgress}%</span>
-                      </div>
-                      <div
-                        className="w-full rounded-full h-1.5"
-                        style={{ background: "rgba(255,255,255,0.1)" }}
-                      >
-                        <div
-                          className="h-1.5 rounded-full transition-all"
-                          style={{
-                            width: `${uploadProgress}%`,
-                            background:
-                              "linear-gradient(90deg, #d97706, #fbbf24)",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
 
                   <Button
                     type="submit"

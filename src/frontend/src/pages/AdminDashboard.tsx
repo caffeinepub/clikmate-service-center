@@ -5568,7 +5568,8 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
     try {
       const list = await (actor as unknown as backendInterface).getRiders();
       setMembers(list);
-    } catch {
+    } catch (err) {
+      console.error("loadMembers error:", err);
       toast.error("Failed to load team members.");
     } finally {
       setLoading(false);
@@ -5581,7 +5582,10 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
   }, [actor]);
 
   async function handleAddMember() {
-    if (!actor) return;
+    if (!actor) {
+      toast.error("Connection error. Please refresh the page.");
+      return;
+    }
     if (!name.trim()) {
       toast.error("Please enter the member's full name.");
       return;
@@ -5594,26 +5598,41 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
       toast.error("PIN must be exactly 4 digits.");
       return;
     }
+
+    // 1. Optimistic update — instantly add to table
+    const optimistic = { name: name.trim(), mobile, pin, role };
+    setMembers((prev) => [optimistic, ...prev]);
+
+    // 2. Clear form immediately + success toast
+    const savedName = name.trim();
+    setName("");
+    setMobile("");
+    setPin("");
+    setRole("Shop Staff");
+    toast.success(`Team member "${savedName}" added successfully.`);
+
+    // 3. Background backend sync
     setAdding(true);
-    try {
-      await (actor as unknown as backendInterface).addTeamMember(
-        name.trim(),
-        mobile,
-        pin,
-        role,
-      );
-      toast.success(`Team member "${name.trim()}" added successfully.`);
-      setName("");
-      setMobile("");
-      setPin("");
-      setRole("Shop Staff");
-      await loadMembers();
-    } catch (err) {
-      console.error("addTeamMember error:", err);
-      toast.error("Failed to add team member. Please try again.");
-    } finally {
-      setAdding(false);
-    }
+    (actor as unknown as backendInterface)
+      .addTeamMember(
+        optimistic.name,
+        optimistic.mobile,
+        optimistic.pin,
+        optimistic.role,
+      )
+      .then(() => {
+        // success — data is already in UI
+      })
+      .catch((err: unknown) => {
+        // 4. Revert on failure
+        setMembers((prev) =>
+          prev.filter((m) => m.mobile !== optimistic.mobile),
+        );
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`Failed to add team member — reverting: ${msg}`);
+        console.error("addTeamMember backend error:", err);
+      })
+      .finally(() => setAdding(false));
   }
 
   async function handleRemoveMember(memberMobile: string) {
@@ -7162,26 +7181,63 @@ function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
           incomeForm.description,
         );
         toast.success("Income updated!");
+        setShowIncomeModal(false);
+        setEditIncomeEntry(null);
+        setIncomeForm({
+          date: todayStr,
+          category: "Counter Sales (POS)",
+          amount: "",
+          paymentMode: "Cash",
+          description: "",
+        });
+        loadData();
       } else {
-        await (actor as unknown as backendInterface).addManualIncome(
-          incomeForm.category,
-          Number(incomeForm.amount),
-          incomeForm.date,
-          incomeForm.paymentMode,
-          incomeForm.description,
-        );
+        // Optimistic add
+        const tempId = BigInt(-Date.now());
+        const optimisticIncome: ManualIncomeEntry = {
+          id: tempId,
+          category: incomeForm.category,
+          amount: Number(incomeForm.amount),
+          date: incomeForm.date,
+          paymentMode: incomeForm.paymentMode,
+          description: incomeForm.description,
+          createdAt: BigInt(Date.now()),
+        };
+        setIncomes((prev) => [optimisticIncome, ...prev]);
+        setShowIncomeModal(false);
+        setEditIncomeEntry(null);
+        setIncomeForm({
+          date: todayStr,
+          category: "Counter Sales (POS)",
+          amount: "",
+          paymentMode: "Cash",
+          description: "",
+        });
         toast.success("Income added!");
+        setSaving(false);
+
+        // Background sync
+        (actor as unknown as backendInterface)
+          .addManualIncome(
+            incomeForm.category,
+            Number(incomeForm.amount),
+            incomeForm.date,
+            incomeForm.paymentMode,
+            incomeForm.description,
+          )
+          .then((newId) => {
+            setIncomes((prev) =>
+              prev.map((e) => (e.id === tempId ? { ...e, id: newId } : e)),
+            );
+          })
+          .catch((err: unknown) => {
+            setIncomes((prev) => prev.filter((e) => e.id !== tempId));
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error(`Income save failed — reverted: ${msg}`);
+            console.error("addManualIncome error:", err);
+          });
+        return;
       }
-      setShowIncomeModal(false);
-      setEditIncomeEntry(null);
-      setIncomeForm({
-        date: todayStr,
-        category: "Counter Sales (POS)",
-        amount: "",
-        paymentMode: "Cash",
-        description: "",
-      });
-      loadData();
     } catch {
       toast.error("Failed to save income.");
     } finally {
@@ -7203,27 +7259,65 @@ function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
           expenseForm.note,
         );
         toast.success("Expense updated!");
+        setShowExpenseModal(false);
+        setEditExpenseEntry(null);
+        setExpenseForm({
+          date: todayStr,
+          category: "Printer Ink/Paper",
+          amount: "",
+          paymentMode: "Cash",
+          note: "",
+        });
+        loadData();
       } else {
-        await (actor as unknown as backendInterface).addExpense(
-          expenseForm.category,
-          Number(expenseForm.amount),
-          expenseForm.date,
-          expenseForm.paymentMode,
-          expenseForm.note,
-          "admin",
-        );
+        // Optimistic add
+        const tempId = BigInt(-Date.now());
+        const optimisticExpense: ExpenseEntry = {
+          id: tempId,
+          category: expenseForm.category,
+          amount: Number(expenseForm.amount),
+          date: expenseForm.date,
+          paymentMode: expenseForm.paymentMode,
+          note: expenseForm.note,
+          addedBy: "admin",
+          createdAt: BigInt(Date.now()),
+        };
+        setExpenses((prev) => [optimisticExpense, ...prev]);
+        setShowExpenseModal(false);
+        setEditExpenseEntry(null);
+        setExpenseForm({
+          date: todayStr,
+          category: "Printer Ink/Paper",
+          amount: "",
+          paymentMode: "Cash",
+          note: "",
+        });
         toast.success("Expense added!");
+        setSaving(false);
+
+        // Background sync
+        (actor as unknown as backendInterface)
+          .addExpense(
+            expenseForm.category,
+            Number(expenseForm.amount),
+            expenseForm.date,
+            expenseForm.paymentMode,
+            expenseForm.note,
+            "admin",
+          )
+          .then((newId) => {
+            setExpenses((prev) =>
+              prev.map((e) => (e.id === tempId ? { ...e, id: newId } : e)),
+            );
+          })
+          .catch((err: unknown) => {
+            setExpenses((prev) => prev.filter((e) => e.id !== tempId));
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error(`Expense save failed — reverted: ${msg}`);
+            console.error("addExpense error:", err);
+          });
+        return;
       }
-      setShowExpenseModal(false);
-      setEditExpenseEntry(null);
-      setExpenseForm({
-        date: todayStr,
-        category: "Printer Ink/Paper",
-        amount: "",
-        paymentMode: "Cash",
-        note: "",
-      });
-      loadData();
     } catch {
       toast.error("Failed to save expense.");
     } finally {
