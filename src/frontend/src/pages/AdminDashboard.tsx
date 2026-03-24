@@ -5621,7 +5621,8 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
         optimistic.role,
       )
       .then(() => {
-        // success — data is already in UI
+        // Confirm from backend after optimistic update
+        loadMembers();
       })
       .catch((err: unknown) => {
         // 4. Revert on failure
@@ -7229,6 +7230,7 @@ function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
             setIncomes((prev) =>
               prev.map((e) => (e.id === tempId ? { ...e, id: newId } : e)),
             );
+            loadData();
           })
           .catch((err: unknown) => {
             setIncomes((prev) => prev.filter((e) => e.id !== tempId));
@@ -7309,6 +7311,7 @@ function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
             setExpenses((prev) =>
               prev.map((e) => (e.id === tempId ? { ...e, id: newId } : e)),
             );
+            loadData();
           })
           .catch((err: unknown) => {
             setExpenses((prev) => prev.filter((e) => e.id !== tempId));
