@@ -4,7 +4,9 @@ import type {
   CatalogItemInput,
   FilterOrders,
   OrderRecord,
+  Review,
   ShopOrder,
+  TypesettingQuoteRequest,
   backendInterface,
 } from "@/backend.d";
 import { Button } from "@/components/ui/button";
@@ -40,18 +42,22 @@ import {
   Search,
   Settings,
   Shield,
+  Star,
   Trash2,
   Upload,
   Users,
+  Wallet,
   X,
   Zap,
 } from "lucide-react";
+import React from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
+  "CSC & Govt Services",
   "Govt Service",
   "Printing",
   "Smart Card",
@@ -64,6 +70,8 @@ const CATEGORIES = [
 const STOCK_STATUSES = ["In Stock", "Out of Stock", "Limited Stock"];
 
 const CATEGORY_COLORS: Record<string, string> = {
+  "CSC & Govt Services":
+    "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30",
   "Govt Service": "bg-blue-500/20 text-blue-300 border border-blue-500/30",
   Printing: "bg-purple-500/20 text-purple-300 border border-purple-500/30",
   "Smart Card": "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30",
@@ -83,7 +91,9 @@ type NavSection =
   | "active-orders"
   | "order-history"
   | "settings"
-  | "team";
+  | "team"
+  | "wallet"
+  | "reviews";
 
 interface MediaFile {
   id: string;
@@ -101,15 +111,17 @@ interface FormState {
   description: string;
   price: string;
   stockStatus: string;
+  requiredDocuments: string;
   mediaFiles: MediaFile[];
 }
 
 const EMPTY_FORM: FormState = {
   name: "",
-  category: "Govt Service",
+  category: "CSC & Govt Services",
   description: "",
   price: "",
   stockStatus: "In Stock",
+  requiredDocuments: "",
   mediaFiles: [],
 };
 
@@ -523,6 +535,7 @@ function ItemFormModal({
           description: editItem.description,
           price: editItem.price,
           stockStatus: editItem.stockStatus,
+          requiredDocuments: editItem.requiredDocuments || "",
           mediaFiles,
         });
       } else {
@@ -567,6 +580,8 @@ function ItemFormModal({
         description: form.description,
         price: form.price,
         stockStatus: form.stockStatus,
+        requiredDocuments:
+          form.category === "CSC & Govt Services" ? form.requiredDocuments : "",
         mediaFiles: uploadedBlobs,
         mediaTypes,
       };
@@ -575,7 +590,7 @@ function ItemFormModal({
         toast.success("Item updated!");
       } else {
         await actor.addCatalogItem(input);
-        toast.success("Item added!");
+        toast.success("Item Added Successfully");
       }
       onSaved();
       onClose();
@@ -756,6 +771,36 @@ function ItemFormModal({
                 }
               />
             </div>
+
+            {form.category === "CSC & Govt Services" && (
+              <div>
+                <label htmlFor="modal-item-required-docs" style={labelStyle}>
+                  Required Documents (Comma Separated)
+                </label>
+                <input
+                  id="modal-item-required-docs"
+                  data-ocid="admin.required_docs.input"
+                  style={inputStyle}
+                  placeholder="e.g. Aadhaar, Passport Photo, Signature"
+                  value={form.requiredDocuments}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      requiredDocuments: e.target.value,
+                    }))
+                  }
+                />
+                <p
+                  style={{
+                    color: "rgba(167,139,250,0.7)",
+                    fontSize: 11,
+                    marginTop: 4,
+                  }}
+                >
+                  Each document becomes an upload button for the customer
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Right column: Media Uploader */}
@@ -1372,6 +1417,22 @@ function CatalogSection({
                         {item.description}
                       </div>
                     )}
+                    {item.category === "CSC & Govt Services" &&
+                      item.requiredDocuments && (
+                        <div
+                          style={{
+                            color: "#a78bfa",
+                            fontSize: 11,
+                            marginTop: 4,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            maxWidth: 200,
+                          }}
+                        >
+                          📄 Docs: {item.requiredDocuments}
+                        </div>
+                      )}
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <span
@@ -1597,9 +1658,13 @@ function CatalogSection({
 function OrderStatusBadge({ status }: { status: string }) {
   const map: Record<string, { bg: string; color: string }> = {
     Pending: { bg: "rgba(245,158,11,0.15)", color: "#fbbf24" },
+    "Processing/Printing": { bg: "rgba(59,130,246,0.15)", color: "#60a5fa" },
     Printing: { bg: "rgba(59,130,246,0.15)", color: "#60a5fa" },
     "Ready for Pickup": { bg: "rgba(16,185,129,0.15)", color: "#34d399" },
+    "Ready for Delivery": { bg: "rgba(99,102,241,0.15)", color: "#818cf8" },
+    Completed: { bg: "rgba(16,185,129,0.15)", color: "#34d399" },
     Delivered: { bg: "rgba(100,116,139,0.15)", color: "#94a3b8" },
+    Cancelled: { bg: "rgba(239,68,68,0.15)", color: "#f87171" },
   };
   const style = map[status] ?? {
     bg: "rgba(100,116,139,0.15)",
@@ -1622,11 +1687,148 @@ function OrderStatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Files Viewer Modal ────────────────────────────────────────────────────────
+
+function FilesViewerModal({
+  files,
+  onClose,
+}: { files: ExternalBlob[]; onClose: () => void }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+      role="presentation"
+    >
+      <div
+        role="presentation"
+        style={{
+          background: "#0f172a",
+          border: "1px solid rgba(99,102,241,0.4)",
+          borderRadius: 12,
+          padding: 24,
+          minWidth: 340,
+          maxWidth: 520,
+          width: "90%",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 16,
+          }}
+        >
+          <h3
+            style={{ color: "white", fontWeight: 700, fontSize: 16, margin: 0 }}
+          >
+            📂 Customer Uploaded Files
+          </h3>
+          <button
+            type="button"
+            data-ocid="admin.files_modal.close_button"
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              color: "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              fontSize: 20,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+        {files.length === 0 ? (
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
+            No files uploaded.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {files.map((file, i) => (
+              <a
+                key={file.getDirectURL()}
+                href={file.getDirectURL()}
+                target="_blank"
+                rel="noreferrer"
+                data-ocid={`admin.files_modal.button.${i + 1}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  background: "rgba(99,102,241,0.15)",
+                  border: "1px solid rgba(99,102,241,0.35)",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  textDecoration: "none",
+                  color: "#a78bfa",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  transition: "background 0.15s",
+                }}
+              >
+                <span style={{ fontSize: 18 }}>📄</span>
+                <span style={{ flex: 1 }}>File {i + 1}</span>
+                <span
+                  style={{
+                    background: "rgba(99,102,241,0.3)",
+                    borderRadius: 4,
+                    padding: "2px 8px",
+                    fontSize: 11,
+                    color: "#c4b5fd",
+                  }}
+                >
+                  Download / Open
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          data-ocid="admin.files_modal.cancel_button"
+          onClick={onClose}
+          style={{
+            marginTop: 16,
+            width: "100%",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 8,
+            color: "rgba(255,255,255,0.6)",
+            padding: "8px 0",
+            cursor: "pointer",
+            fontSize: 13,
+          }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Orders Section ───────────────────────────────────────────────────────────
 
 function OrdersSection({ actor }: { actor: backendInterface | null }) {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewingFiles, setViewingFiles] = useState<any[] | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<bigint | null>(null);
 
   useEffect(() => {
     if (!actor) return;
@@ -1637,6 +1839,30 @@ function OrdersSection({ actor }: { actor: backendInterface | null }) {
       .catch(() => toast.error("Failed to load orders."))
       .finally(() => setLoading(false));
   }, [actor]);
+
+  async function handlePrintOrderStatusChange(
+    orderId: bigint,
+    newStatus: string,
+  ) {
+    if (!actor) return;
+    setUpdatingOrderId(orderId);
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)),
+    );
+    try {
+      await actor.updateOrderStatus(orderId, newStatus);
+      toast.success("Status updated");
+    } catch {
+      toast.error("Failed to update status");
+      // revert on error
+      actor
+        .filterOrders({})
+        .then((data) => setOrders(data))
+        .catch(() => {});
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  }
 
   return (
     <div style={{ padding: 24 }}>
@@ -1695,6 +1921,7 @@ function OrdersSection({ actor }: { actor: backendInterface | null }) {
                   "Status",
                   "Date",
                   "Files",
+                  "Actions",
                 ].map((h) => (
                   <th
                     key={h}
@@ -1774,12 +2001,84 @@ function OrdersSection({ actor }: { actor: backendInterface | null }) {
                   >
                     {order.uploadedFiles.length} file(s)
                   </td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                        alignItems: "flex-start",
+                        minWidth: 160,
+                      }}
+                    >
+                      {updatingOrderId === order.id ? (
+                        <Loader2
+                          style={{
+                            width: 16,
+                            height: 16,
+                            animation: "spin 1s linear infinite",
+                            color: "#a78bfa",
+                          }}
+                        />
+                      ) : (
+                        <select
+                          data-ocid={`admin.orders.status.${idx + 1}`}
+                          value={order.status}
+                          onChange={(e) =>
+                            handlePrintOrderStatusChange(
+                              order.id,
+                              e.target.value,
+                            )
+                          }
+                          style={{
+                            background: "#1e293b",
+                            color: "#e2e8f0",
+                            border: "1px solid #334155",
+                            borderRadius: 6,
+                            padding: "4px 8px",
+                            fontSize: 12,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {SHOP_ORDER_STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {order.uploadedFiles.length > 0 && (
+                        <button
+                          type="button"
+                          data-ocid={`admin.orders.view_files.${idx + 1}`}
+                          onClick={() => setViewingFiles(order.uploadedFiles)}
+                          style={{
+                            background: "rgba(99,102,241,0.2)",
+                            color: "#818cf8",
+                            border: "1px solid rgba(99,102,241,0.4)",
+                            borderRadius: 6,
+                            padding: "4px 10px",
+                            fontSize: 12,
+                            cursor: "pointer",
+                          }}
+                        >
+                          📂 View Files
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+      {viewingFiles && (
+        <FilesViewerModal
+          files={viewingFiles}
+          onClose={() => setViewingFiles(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1938,15 +2237,25 @@ function DashboardSection({ items }: { items: CatalogItem[] }) {
 
 const SHOP_ORDER_STATUSES = [
   "Pending",
-  "Printing",
+  "Processing/Printing",
   "Ready for Pickup",
   "Ready for Delivery",
-  "Delivered",
+  "Completed",
+  "Cancelled",
+];
+
+const CSC_ORDER_STATUSES = [
+  "Pending",
+  "Docs Received",
+  "Processing Application",
+  "Hold/Missing Info",
+  "Submitted to Portal",
+  "Completed",
   "Cancelled",
 ];
 const ACTIVE_STATUSES = [
   "Pending",
-  "Printing",
+  "Processing/Printing",
   "Ready for Pickup",
   "Ready for Delivery",
 ];
@@ -1954,9 +2263,11 @@ const ACTIVE_STATUSES = [
 function ShopOrderStatusBadge({ status }: { status: string }) {
   const colorMap: Record<string, { bg: string; color: string }> = {
     Pending: { bg: "rgba(234,179,8,0.2)", color: "#fbbf24" },
+    "Processing/Printing": { bg: "rgba(59,130,246,0.2)", color: "#60a5fa" },
     Printing: { bg: "rgba(59,130,246,0.2)", color: "#60a5fa" },
     "Ready for Pickup": { bg: "rgba(16,185,129,0.2)", color: "#34d399" },
     "Ready for Delivery": { bg: "rgba(99,102,241,0.2)", color: "#818cf8" },
+    Completed: { bg: "rgba(16,185,129,0.2)", color: "#34d399" },
     Delivered: { bg: "rgba(139,92,246,0.2)", color: "#a78bfa" },
     Cancelled: { bg: "rgba(239,68,68,0.2)", color: "#f87171" },
   };
@@ -1980,15 +2291,285 @@ function ShopOrderStatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Typesetting Quotes Table ─────────────────────────────────────────────────
+
+function TypesettingQuotesTable({ actor }: { actor: backendInterface | null }) {
+  const [quotes, setQuotes] = useState<TypesettingQuoteRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<bigint | null>(null);
+
+  function loadQuotes() {
+    if (!actor) return;
+    setLoading(true);
+    (actor as unknown as backendInterface)
+      .getAllTypesettingQuotes()
+      .then((data) => setQuotes(data))
+      .catch(() => toast.error("Failed to load quotes."))
+      .finally(() => setLoading(false));
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadQuotes is stable
+  useEffect(() => {
+    loadQuotes();
+  }, [actor]);
+
+  async function handleStatusUpdate(id: bigint, status: string) {
+    if (!actor) return;
+    setUpdatingId(id);
+    try {
+      await (actor as unknown as backendInterface).updateTypesettingQuoteStatus(
+        id,
+        { status },
+      );
+      toast.success(`Quote status updated to "${status}"`);
+      loadQuotes();
+    } catch {
+      toast.error("Failed to update status.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          textAlign: "center",
+          padding: 40,
+          color: "rgba(255,255,255,0.4)",
+        }}
+      >
+        <Loader2
+          style={{
+            width: 28,
+            height: 28,
+            margin: "0 auto",
+            animation: "spin 1s linear infinite",
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (quotes.length === 0) {
+    return (
+      <div
+        data-ocid="admin.typesetting_quotes.empty_state"
+        style={{
+          textAlign: "center",
+          padding: 40,
+          color: "rgba(255,255,255,0.35)",
+        }}
+      >
+        <p>No typesetting quote requests yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table
+        style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}
+      >
+        <thead>
+          <tr>
+            {[
+              "ID",
+              "Name",
+              "Phone",
+              "Subject",
+              "Format",
+              "Language",
+              "Submitted",
+              "Status",
+              "Action",
+            ].map((h) => (
+              <th
+                key={h}
+                style={{
+                  padding: "10px 12px",
+                  textAlign: "left",
+                  color: "rgba(255,255,255,0.4)",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  borderBottom: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {quotes.map((q, idx) => (
+            <tr
+              key={String(q.id)}
+              data-ocid={`admin.typesetting_quotes.item.${idx + 1}`}
+              style={{
+                backgroundColor:
+                  idx % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+              }}
+            >
+              <td
+                style={{
+                  padding: "10px 12px",
+                  color: "#a78bfa",
+                  fontWeight: 600,
+                  fontSize: 13,
+                }}
+              >
+                #{String(q.id)}
+              </td>
+              <td
+                style={{ padding: "10px 12px", color: "white", fontSize: 13 }}
+              >
+                {q.name}
+              </td>
+              <td
+                style={{
+                  padding: "10px 12px",
+                  color: "rgba(255,255,255,0.6)",
+                  fontSize: 13,
+                }}
+              >
+                {q.phone}
+              </td>
+              <td
+                style={{
+                  padding: "10px 12px",
+                  color: "rgba(255,255,255,0.8)",
+                  fontSize: 13,
+                }}
+              >
+                {q.subject}
+              </td>
+              <td
+                style={{
+                  padding: "10px 12px",
+                  color: "rgba(255,255,255,0.7)",
+                  fontSize: 12,
+                }}
+              >
+                {q.format}
+              </td>
+              <td
+                style={{
+                  padding: "10px 12px",
+                  color: "rgba(255,255,255,0.7)",
+                  fontSize: 12,
+                }}
+              >
+                {q.language}
+              </td>
+              <td
+                style={{
+                  padding: "10px 12px",
+                  color: "rgba(255,255,255,0.4)",
+                  fontSize: 12,
+                }}
+              >
+                {new Date(Number(q.submittedAt) / 1_000_000).toLocaleDateString(
+                  "en-IN",
+                  { day: "numeric", month: "short" },
+                )}
+              </td>
+              <td style={{ padding: "10px 12px" }}>
+                <span
+                  style={{
+                    padding: "3px 10px",
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background:
+                      q.status === "Completed"
+                        ? "rgba(16,185,129,0.2)"
+                        : q.status === "In Progress"
+                          ? "rgba(59,130,246,0.2)"
+                          : q.status === "Rejected"
+                            ? "rgba(239,68,68,0.2)"
+                            : "rgba(234,179,8,0.2)",
+                    color:
+                      q.status === "Completed"
+                        ? "#10b981"
+                        : q.status === "In Progress"
+                          ? "#60a5fa"
+                          : q.status === "Rejected"
+                            ? "#f87171"
+                            : "#fbbf24",
+                  }}
+                >
+                  {q.status || "Pending"}
+                </span>
+              </td>
+              <td style={{ padding: "10px 12px" }}>
+                <select
+                  data-ocid={`admin.typesetting_quotes.status.select.${idx + 1}`}
+                  onChange={(e) => handleStatusUpdate(q.id, e.target.value)}
+                  disabled={updatingId === q.id}
+                  defaultValue=""
+                  style={{
+                    background: "rgba(255,255,255,0.07)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 8,
+                    padding: "5px 8px",
+                    color: "white",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    outline: "none",
+                  }}
+                >
+                  <option value="" disabled>
+                    Update status
+                  </option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ActiveOrdersSection({ actor }: { actor: backendInterface | null }) {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<bigint | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<bigint | null>(null);
+  const [viewingActiveFiles, setViewingActiveFiles] = useState<any[] | null>(
+    null,
+  );
+  const [uploadingFinalId, setUploadingFinalId] = useState<bigint | null>(null);
+
+  async function handleUploadFinalOutput(orderId: bigint, file: File) {
+    if (!actor) return;
+    setUploadingFinalId(orderId);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const blob = ExternalBlob.fromBytes(bytes);
+      await (actor as unknown as backendInterface).uploadCscFinalOutput(
+        orderId,
+        blob,
+      );
+      toast.success("Final output uploaded! Customer can now download it.");
+      loadOrders();
+    } catch {
+      toast.error("Failed to upload final output.");
+    } finally {
+      setUploadingFinalId(null);
+    }
+  }
 
   function loadOrders() {
     if (!actor) return;
     setLoading(true);
-    (actor as unknown as backendInterface)
+    (actor as unknown as { getAllShopOrders: () => Promise<ShopOrder[]> })
       .getAllShopOrders()
       .then((data) => {
         const sorted = [...data].sort(
@@ -2005,16 +2586,26 @@ function ActiveOrdersSection({ actor }: { actor: backendInterface | null }) {
     loadOrders();
   }, [actor]);
 
-  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
+  const activeOrders = orders.filter(
+    (o) =>
+      ACTIVE_STATUSES.includes(o.status) ||
+      [
+        "Docs Received",
+        "Processing Application",
+        "Hold/Missing Info",
+        "Submitted to Portal",
+      ].includes(o.status),
+  );
 
   async function handleStatusChange(orderId: bigint, newStatus: string) {
     if (!actor) return;
     setUpdatingId(orderId);
     try {
-      await (actor as unknown as backendInterface).updateShopOrderStatus(
-        orderId,
-        newStatus,
-      );
+      await (
+        actor as unknown as {
+          updateShopOrderStatus: (id: bigint, status: string) => Promise<void>;
+        }
+      ).updateShopOrderStatus(orderId, newStatus);
       toast.success(`Status updated to "${newStatus}"`);
       loadOrders();
     } catch {
@@ -2121,6 +2712,7 @@ function ActiveOrdersSection({ actor }: { actor: backendInterface | null }) {
                     "Payment",
                     "Status",
                     "Time",
+                    "Actions",
                   ].map((h) => (
                     <th
                       key={h}
@@ -2141,143 +2733,441 @@ function ActiveOrdersSection({ actor }: { actor: backendInterface | null }) {
                 </tr>
               </thead>
               <tbody>
-                {activeOrders.map((order, idx) => (
-                  <tr
-                    key={String(order.id)}
-                    data-ocid={`admin.active_orders.row.${idx + 1}`}
-                    style={{
-                      backgroundColor: idx % 2 === 0 ? "#111827" : "#0f1729",
-                      borderTop: "1px solid rgba(255,255,255,0.05)",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        color: "#a78bfa",
-                        fontWeight: 600,
-                        fontSize: 13,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      #SO-{String(order.id)}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        color: "white",
-                        fontSize: 14,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {order.customerName}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        color: "rgba(255,255,255,0.6)",
-                        fontSize: 13,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {order.phone}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        color: "rgba(255,255,255,0.7)",
-                        fontSize: 12,
-                        maxWidth: 160,
-                      }}
-                    >
-                      {order.items
-                        .map((i) => `${i.itemName} x${i.qty}`)
-                        .join(", ")}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        color: "#fbbf24",
-                        fontWeight: 700,
-                        fontSize: 13,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ₹{order.totalAmount.toFixed(0)}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        color: "rgba(255,255,255,0.6)",
-                        fontSize: 12,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {order.deliveryMethod}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        color: "rgba(255,255,255,0.6)",
-                        fontSize: 12,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {order.paymentMethod}
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      {updatingId === order.id ? (
-                        <Loader2
+                {activeOrders.map((order, idx) => {
+                  const isCsc =
+                    order.cscDocuments && order.cscDocuments.length > 0;
+                  const isExpanded = expandedOrderId === order.id;
+                  return (
+                    <React.Fragment key={String(order.id)}>
+                      <tr
+                        data-ocid={`admin.active_orders.row.${idx + 1}`}
+                        tabIndex={isCsc ? 0 : undefined}
+                        style={{
+                          backgroundColor:
+                            idx % 2 === 0 ? "#111827" : "#0f1729",
+                          borderTop: "1px solid rgba(255,255,255,0.05)",
+                          cursor: isCsc ? "pointer" : "default",
+                        }}
+                        onClick={
+                          isCsc
+                            ? () =>
+                                setExpandedOrderId(isExpanded ? null : order.id)
+                            : undefined
+                        }
+                        onKeyDown={
+                          isCsc
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ")
+                                  setExpandedOrderId(
+                                    isExpanded ? null : order.id,
+                                  );
+                              }
+                            : undefined
+                        }
+                      >
+                        <td
                           style={{
-                            width: 16,
-                            height: 16,
-                            animation: "spin 1s linear infinite",
+                            padding: "12px 14px",
                             color: "#a78bfa",
-                          }}
-                        />
-                      ) : (
-                        <select
-                          data-ocid={`admin.active_orders.status.${idx + 1}`}
-                          value={order.status}
-                          onChange={(e) =>
-                            handleStatusChange(order.id, e.target.value)
-                          }
-                          style={{
-                            background: "#1e2a3a",
-                            border: "1px solid rgba(255,255,255,0.15)",
-                            borderRadius: 6,
-                            color: "white",
-                            padding: "4px 8px",
-                            fontSize: 12,
-                            cursor: "pointer",
+                            fontWeight: 600,
+                            fontSize: 13,
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          {SHOP_ORDER_STATUSES.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
+                          #SO-{String(order.id)}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 14px",
+                            color: "white",
+                            fontSize: 14,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {order.customerName}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 14px",
+                            color: "rgba(255,255,255,0.6)",
+                            fontSize: 13,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {order.phone}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 14px",
+                            color: "rgba(255,255,255,0.7)",
+                            fontSize: 12,
+                            maxWidth: 160,
+                          }}
+                        >
+                          {order.items
+                            .map((i) => `${i.itemName} x${i.qty}`)
+                            .join(", ")}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 14px",
+                            color: "#fbbf24",
+                            fontWeight: 700,
+                            fontSize: 13,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          ₹{order.totalAmount.toFixed(0)}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 14px",
+                            color: "rgba(255,255,255,0.6)",
+                            fontSize: 12,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {order.deliveryMethod}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 14px",
+                            color: "rgba(255,255,255,0.6)",
+                            fontSize: 12,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {order.paymentMethod}
+                        </td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <ShopOrderStatusBadge status={order.status} />
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 14px",
+                            color: "rgba(255,255,255,0.4)",
+                            fontSize: 12,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {new Date(
+                            Number(order.createdAt) / 1_000_000,
+                          ).toLocaleDateString()}
+                        </td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6,
+                              alignItems: "flex-start",
+                              minWidth: 160,
+                            }}
+                          >
+                            {updatingId === order.id ? (
+                              <Loader2
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  animation: "spin 1s linear infinite",
+                                  color: "#a78bfa",
+                                }}
+                              />
+                            ) : (
+                              <select
+                                data-ocid={`admin.active_orders.status.${idx + 1}`}
+                                value={order.status}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleStatusChange(order.id, e.target.value);
+                                }}
+                                style={{
+                                  background: "#1e293b",
+                                  color: "#e2e8f0",
+                                  border: "1px solid #334155",
+                                  borderRadius: 6,
+                                  padding: "4px 8px",
+                                  fontSize: 12,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {(isCsc
+                                  ? CSC_ORDER_STATUSES
+                                  : SHOP_ORDER_STATUSES
+                                ).map((s) => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            {order.cscDocuments &&
+                              order.cscDocuments.length > 0 && (
+                                <button
+                                  type="button"
+                                  data-ocid={`admin.active_orders.view_docs.${idx + 1}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setViewingActiveFiles(order.cscDocuments);
+                                  }}
+                                  style={{
+                                    background: "rgba(99,102,241,0.2)",
+                                    color: "#818cf8",
+                                    border: "1px solid rgba(99,102,241,0.4)",
+                                    borderRadius: 6,
+                                    padding: "4px 10px",
+                                    fontSize: 12,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  📂 View Docs
+                                </button>
+                              )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isCsc && isExpanded && (
+                        <tr
+                          key={`csc-${String(order.id)}`}
+                          style={{ backgroundColor: "rgba(99,102,241,0.08)" }}
+                        >
+                          <td colSpan={10} style={{ padding: "16px 20px" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 12,
+                              }}
+                            >
+                              <p
+                                style={{
+                                  color: "#a78bfa",
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                }}
+                              >
+                                📁 CSC Application Details
+                              </p>
+                              {order.cscSpecialDetails && (
+                                <div>
+                                  <p
+                                    style={{
+                                      color: "rgba(255,255,255,0.45)",
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.05em",
+                                    }}
+                                  >
+                                    Special Details / Login IDs
+                                  </p>
+                                  <p
+                                    style={{
+                                      color: "rgba(255,255,255,0.8)",
+                                      fontSize: 13,
+                                      marginTop: 4,
+                                      background: "rgba(255,255,255,0.05)",
+                                      padding: "8px 12px",
+                                      borderRadius: 6,
+                                    }}
+                                  >
+                                    {order.cscSpecialDetails}
+                                  </p>
+                                </div>
+                              )}
+                              {order.cscDocuments &&
+                                order.cscDocuments.length > 0 && (
+                                  <div>
+                                    <p
+                                      style={{
+                                        color: "rgba(255,255,255,0.45)",
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.05em",
+                                        marginBottom: 8,
+                                      }}
+                                    >
+                                      Customer Uploaded Documents
+                                    </p>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: 8,
+                                      }}
+                                    >
+                                      {order.cscDocuments.map((doc, di) => (
+                                        <a
+                                          key={doc.getDirectURL()}
+                                          href={doc.getDirectURL()}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          data-ocid={`admin.csc_doc.button.${di + 1}`}
+                                          style={{
+                                            background: "rgba(99,102,241,0.2)",
+                                            border:
+                                              "1px solid rgba(99,102,241,0.4)",
+                                            borderRadius: 8,
+                                            padding: "6px 14px",
+                                            color: "#a78bfa",
+                                            fontSize: 12,
+                                            textDecoration: "none",
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          📄 Document {di + 1}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              <div>
+                                <p
+                                  style={{
+                                    color: "rgba(255,255,255,0.45)",
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    marginBottom: 8,
+                                  }}
+                                >
+                                  Upload Final Output (Receipt / Acknowledgment)
+                                </p>
+                                {order.cscFinalOutput ? (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 12,
+                                    }}
+                                  >
+                                    <a
+                                      href={order.cscFinalOutput.getDirectURL()}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      style={{
+                                        color: "#4ade80",
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      ✅ Final Output Uploaded — View/Download
+                                    </a>
+                                    <label
+                                      htmlFor={`final-upload-${String(order.id)}`}
+                                      style={{
+                                        background: "rgba(99,102,241,0.2)",
+                                        border:
+                                          "1px solid rgba(99,102,241,0.4)",
+                                        borderRadius: 8,
+                                        padding: "6px 14px",
+                                        color: "#a78bfa",
+                                        fontSize: 12,
+                                        cursor: "pointer",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      Re-upload
+                                    </label>
+                                  </div>
+                                ) : (
+                                  <label
+                                    htmlFor={`final-upload-${String(order.id)}`}
+                                    data-ocid={
+                                      "admin.csc_upload_final.upload_button"
+                                    }
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 8,
+                                      background:
+                                        uploadingFinalId === order.id
+                                          ? "rgba(255,255,255,0.05)"
+                                          : "rgba(34,197,94,0.15)",
+                                      border: "1px solid rgba(34,197,94,0.4)",
+                                      borderRadius: 8,
+                                      padding: "8px 16px",
+                                      color: "#4ade80",
+                                      fontSize: 13,
+                                      cursor:
+                                        uploadingFinalId === order.id
+                                          ? "not-allowed"
+                                          : "pointer",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {uploadingFinalId === order.id ? (
+                                      <>
+                                        <Loader2
+                                          style={{
+                                            width: 14,
+                                            height: 14,
+                                            animation:
+                                              "spin 1s linear infinite",
+                                          }}
+                                        />{" "}
+                                        Uploading...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Upload
+                                          style={{ width: 14, height: 14 }}
+                                        />{" "}
+                                        Upload Final Output
+                                      </>
+                                    )}
+                                  </label>
+                                )}
+                                <input
+                                  id={`final-upload-${String(order.id)}`}
+                                  type="file"
+                                  accept=".pdf,image/*"
+                                  style={{ display: "none" }}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file)
+                                      handleUploadFinalOutput(order.id, file);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        color: "rgba(255,255,255,0.4)",
-                        fontSize: 12,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {new Date(
-                        Number(order.createdAt) / 1_000_000,
-                      ).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* Typesetting Quote Requests */}
+      <div style={{ marginTop: 40 }}>
+        <h2
+          style={{
+            color: "white",
+            fontWeight: 700,
+            fontSize: 16,
+            marginBottom: 16,
+          }}
+        >
+          Custom Quote Requests (Typesetting)
+        </h2>
+        <TypesettingQuotesTable actor={actor} />
+      </div>
+      {viewingActiveFiles && (
+        <FilesViewerModal
+          files={viewingActiveFiles}
+          onClose={() => setViewingActiveFiles(null)}
+        />
+      )}
     </div>
   );
 }
@@ -2290,7 +3180,7 @@ function OrderHistorySection({ actor }: { actor: backendInterface | null }) {
 
   useEffect(() => {
     if (!actor) return;
-    (actor as unknown as backendInterface)
+    (actor as unknown as { getAllShopOrders: () => Promise<ShopOrder[]> })
       .getAllShopOrders()
       .then((data) => {
         const completed = data
@@ -2485,6 +3375,437 @@ function OrderHistorySection({ actor }: { actor: backendInterface | null }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Customer Reviews Section ─────────────────────────────────────────────────
+function ReviewsAdminSection({ actor }: { actor: backendInterface | null }) {
+  const [reviews, setReviews] = React.useState<Review[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [deleteTarget, setDeleteTarget] = React.useState<Review | null>(null);
+
+  function loadReviews() {
+    if (!actor) return;
+    setLoading(true);
+    actor
+      .getAllReviews()
+      .then((data) => setReviews(data))
+      .catch(() => toast.error("Failed to load reviews."))
+      .finally(() => setLoading(false));
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadReviews is stable
+  useEffect(() => {
+    if (actor) loadReviews();
+  }, [actor]);
+
+  async function handleToggle(review: Review) {
+    if (!actor) return;
+    try {
+      await actor.toggleReviewPublished(review.id);
+      toast.success(
+        review.published ? "Review unpublished." : "Review published.",
+      );
+      loadReviews();
+    } catch {
+      toast.error("Failed to update review.");
+    }
+  }
+
+  async function handleDelete(review: Review) {
+    if (!actor) return;
+    try {
+      await actor.deleteReview(review.id);
+      toast.success("Review deleted.");
+      setDeleteTarget(null);
+      loadReviews();
+    } catch {
+      toast.error("Failed to delete review.");
+    }
+  }
+
+  const avg =
+    reviews.length > 0
+      ? (
+          reviews.reduce((sum, r) => sum + Number(r.serviceRating), 0) /
+          reviews.length
+        ).toFixed(1)
+      : "–";
+
+  function StarDisplay({ rating }: { rating: number }) {
+    return (
+      <span className="flex gap-0.5">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Star
+            key={n}
+            style={{
+              width: 12,
+              height: 12,
+              fill: n <= rating ? "#facc15" : "#e5e7eb",
+              color: n <= rating ? "#facc15" : "#e5e7eb",
+            }}
+          />
+        ))}
+      </span>
+    );
+  }
+
+  return (
+    <div style={{ padding: "24px 20px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 20,
+        }}
+      >
+        <h2
+          style={{ fontSize: 22, fontWeight: 700, color: "#1e3a5f" }}
+          data-ocid="admin.reviews.section"
+        >
+          Customer Reviews
+        </h2>
+        <button
+          type="button"
+          data-ocid="admin.reviews.refresh.button"
+          onClick={loadReviews}
+          style={{
+            padding: "6px 14px",
+            borderRadius: 8,
+            background: "#1e3a5f",
+            color: "#fff",
+            fontSize: 13,
+            fontWeight: 600,
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Summary bar */}
+      <div
+        style={{
+          display: "flex",
+          gap: 20,
+          marginBottom: 24,
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          style={{
+            background: "#f0f4ff",
+            borderRadius: 12,
+            padding: "12px 20px",
+            minWidth: 140,
+          }}
+        >
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#1e3a5f" }}>
+            {reviews.length}
+          </div>
+          <div style={{ fontSize: 12, color: "#6b7280" }}>Total Reviews</div>
+        </div>
+        <div
+          style={{
+            background: "#fffbeb",
+            borderRadius: 12,
+            padding: "12px 20px",
+            minWidth: 140,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 24,
+              fontWeight: 700,
+              color: "#92400e",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {avg}{" "}
+            <Star
+              style={{
+                width: 20,
+                height: 20,
+                fill: "#facc15",
+                color: "#facc15",
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 12, color: "#6b7280" }}>Avg Rating</div>
+        </div>
+        <div
+          style={{
+            background: "#f0fdf4",
+            borderRadius: 12,
+            padding: "12px 20px",
+            minWidth: 140,
+          }}
+        >
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#166534" }}>
+            {reviews.filter((r) => r.published).length}
+          </div>
+          <div style={{ fontSize: 12, color: "#6b7280" }}>Published</div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div
+          data-ocid="admin.reviews.loading_state"
+          style={{ textAlign: "center", padding: "48px 0", color: "#6b7280" }}
+        >
+          Loading reviews...
+        </div>
+      ) : reviews.length === 0 ? (
+        <div
+          data-ocid="admin.reviews.empty_state"
+          style={{ textAlign: "center", padding: "48px 0", color: "#9ca3af" }}
+        >
+          No reviews yet.
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table
+            data-ocid="admin.reviews.table"
+            style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}
+          >
+            <thead>
+              <tr
+                style={{
+                  background: "#f9fafb",
+                  borderBottom: "2px solid #e5e7eb",
+                }}
+              >
+                {[
+                  "Customer",
+                  "Location",
+                  "Order",
+                  "Service ★",
+                  "Delivery ★",
+                  "Comment",
+                  "Date",
+                  "Status",
+                  "Actions",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "10px 12px",
+                      textAlign: "left",
+                      fontWeight: 600,
+                      color: "#374151",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {reviews.map((review, idx) => {
+                const ordLabel =
+                  Number(review.orderId) === 0
+                    ? "Seed"
+                    : `#SO-${String(review.orderId)}`;
+                const dateStr = new Date(
+                  Number(review.createdAt) / 1_000_000,
+                ).toLocaleDateString("en-IN");
+                return (
+                  <tr
+                    key={String(review.id)}
+                    data-ocid={`admin.reviews.row.${idx + 1}`}
+                    style={{
+                      borderBottom: "1px solid #f3f4f6",
+                      background: idx % 2 === 0 ? "#fff" : "#fafafa",
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: "10px 12px",
+                        fontWeight: 600,
+                        color: "#1e3a5f",
+                      }}
+                    >
+                      {review.customerName}
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          fontWeight: 400,
+                        }}
+                      >
+                        {review.customerPhone}
+                      </div>
+                    </td>
+                    <td style={{ padding: "10px 12px", color: "#6b7280" }}>
+                      {review.location || "–"}
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 12px",
+                        color: "#6b7280",
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {ordLabel}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <StarDisplay rating={Number(review.serviceRating)} />
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {review.deliveryRating !== undefined &&
+                      review.deliveryRating !== null ? (
+                        <StarDisplay rating={Number(review.deliveryRating)} />
+                      ) : (
+                        <span style={{ color: "#9ca3af" }}>N/A</span>
+                      )}
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 12px",
+                        color: "#374151",
+                        maxWidth: 200,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={review.serviceComment}
+                    >
+                      &ldquo;{review.serviceComment.slice(0, 60)}
+                      {review.serviceComment.length > 60 ? "…" : ""}&rdquo;
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 12px",
+                        color: "#9ca3af",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {dateStr}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <button
+                        type="button"
+                        data-ocid={`admin.reviews.toggle.${idx + 1}`}
+                        onClick={() => handleToggle(review)}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          border: "none",
+                          cursor: "pointer",
+                          background: review.published ? "#dcfce7" : "#fee2e2",
+                          color: review.published ? "#166534" : "#991b1b",
+                        }}
+                      >
+                        {review.published ? "Published" : "Unpublished"}
+                      </button>
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <button
+                        type="button"
+                        data-ocid={`admin.reviews.delete_button.${idx + 1}`}
+                        onClick={() => setDeleteTarget(review)}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          border: "none",
+                          cursor: "pointer",
+                          background: "#fee2e2",
+                          color: "#991b1b",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div
+          data-ocid="admin.reviews.delete.dialog"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 16,
+              padding: 28,
+              maxWidth: 400,
+              width: "90%",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            }}
+          >
+            <h3 style={{ fontWeight: 700, marginBottom: 12, fontSize: 18 }}>
+              Delete Review?
+            </h3>
+            <p style={{ color: "#6b7280", marginBottom: 24, fontSize: 14 }}>
+              Are you sure you want to permanently delete the review from{" "}
+              <strong>{deleteTarget.customerName}</strong>? This cannot be
+              undone.
+            </p>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                type="button"
+                data-ocid="admin.reviews.delete.cancel_button"
+                onClick={() => setDeleteTarget(null)}
+                style={{
+                  flex: 1,
+                  padding: "10px 0",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 14,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-ocid="admin.reviews.delete.confirm_button"
+                onClick={() => handleDelete(deleteTarget)}
+                style={{
+                  flex: 1,
+                  padding: "10px 0",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#ef4444",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 14,
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3585,6 +4906,290 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
   );
 }
 
+// ─── WalletSection ───────────────────────────────────────────────────────────
+
+function WalletSection({ actor }: { actor: backendInterface | null }) {
+  const [mobileInput, setMobileInput] = useState("");
+  const [balance, setBalance] = useState<number | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  async function handleLookup() {
+    if (!actor || mobileInput.length !== 10) {
+      toast.error("Enter a valid 10-digit mobile number.");
+      return;
+    }
+    setBalanceLoading(true);
+    try {
+      const bal = await (actor as unknown as backendInterface).getWalletBalance(
+        mobileInput,
+      );
+      setBalance(bal);
+    } catch {
+      toast.error("Failed to fetch balance.");
+    } finally {
+      setBalanceLoading(false);
+    }
+  }
+
+  async function handleRecharge() {
+    if (!actor || mobileInput.length !== 10) {
+      toast.error("Enter a valid 10-digit mobile number first.");
+      return;
+    }
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      toast.error("Enter a valid amount.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const newBal = await (
+        actor as unknown as backendInterface
+      ).rechargeWallet(mobileInput, amt);
+      setBalance(newBal);
+      setAmount("");
+      toast.success(`Wallet recharged! New balance: ₹${newBal.toFixed(2)}`);
+    } catch {
+      toast.error("Failed to recharge wallet.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleDeduct() {
+    if (!actor || mobileInput.length !== 10) {
+      toast.error("Enter a valid 10-digit mobile number first.");
+      return;
+    }
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      toast.error("Enter a valid amount.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const newBal = await (actor as unknown as backendInterface).deductWallet(
+        mobileInput,
+        amt,
+      );
+      setBalance(newBal);
+      setAmount("");
+      toast.success(`Amount deducted! New balance: ₹${newBal.toFixed(2)}`);
+    } catch {
+      toast.error("Failed to deduct from wallet.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ padding: 24 }}>
+      <h2
+        style={{
+          color: "white",
+          fontWeight: 700,
+          fontSize: 18,
+          marginBottom: 20,
+        }}
+      >
+        Customer Wallet Management
+      </h2>
+
+      <div
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 16,
+          padding: 24,
+          maxWidth: 540,
+        }}
+      >
+        {/* Mobile Lookup */}
+        <div style={{ marginBottom: 20 }}>
+          <label
+            htmlFor="wallet-mobile"
+            style={{
+              color: "rgba(255,255,255,0.5)",
+              fontSize: 12,
+              fontWeight: 600,
+              display: "block",
+              marginBottom: 6,
+            }}
+          >
+            CUSTOMER MOBILE NUMBER
+          </label>
+          <div style={{ display: "flex", gap: 10 }}>
+            <input
+              type="tel"
+              id="wallet-mobile"
+              data-ocid="admin.wallet.mobile.input"
+              value={mobileInput}
+              onChange={(e) =>
+                setMobileInput(e.target.value.replace(/\D/g, "").slice(0, 10))
+              }
+              placeholder="10-digit mobile number"
+              style={{
+                flex: 1,
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 10,
+                padding: "10px 14px",
+                color: "white",
+                fontSize: 14,
+                outline: "none",
+              }}
+            />
+            <button
+              type="button"
+              data-ocid="admin.wallet.lookup.button"
+              onClick={handleLookup}
+              disabled={balanceLoading}
+              style={{
+                background: "#3b82f6",
+                border: "none",
+                borderRadius: 10,
+                padding: "10px 18px",
+                color: "white",
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                opacity: balanceLoading ? 0.7 : 1,
+              }}
+            >
+              {balanceLoading ? "..." : "Lookup Balance"}
+            </button>
+          </div>
+
+          {balance !== null && (
+            <div
+              data-ocid="admin.wallet.balance.card"
+              style={{
+                marginTop: 14,
+                padding: "14px 18px",
+                borderRadius: 12,
+                background:
+                  "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(59,130,246,0.15))",
+                border: "1px solid rgba(99,102,241,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color: "rgba(255,255,255,0.5)",
+                    fontSize: 11,
+                    marginBottom: 2,
+                  }}
+                >
+                  Current Balance
+                </div>
+                <div style={{ color: "white", fontWeight: 800, fontSize: 22 }}>
+                  ₹{balance.toFixed(2)}
+                </div>
+              </div>
+              <Wallet style={{ width: 28, height: 28, color: "#a78bfa" }} />
+            </div>
+          )}
+        </div>
+
+        {/* Amount + Actions */}
+        <div>
+          <label
+            htmlFor="wallet-amount"
+            style={{
+              color: "rgba(255,255,255,0.5)",
+              fontSize: 12,
+              fontWeight: 600,
+              display: "block",
+              marginBottom: 6,
+            }}
+          >
+            AMOUNT (₹)
+          </label>
+          <input
+            id="wallet-amount"
+            type="number"
+            data-ocid="admin.wallet.amount.input"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Enter amount"
+            min={1}
+            style={{
+              width: "100%",
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              color: "white",
+              fontSize: 14,
+              outline: "none",
+              marginBottom: 14,
+              boxSizing: "border-box",
+            }}
+          />
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              type="button"
+              data-ocid="admin.wallet.recharge.button"
+              onClick={handleRecharge}
+              disabled={actionLoading}
+              style={{
+                flex: 1,
+                background: "#10b981",
+                border: "none",
+                borderRadius: 10,
+                padding: "11px",
+                color: "white",
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer",
+                opacity: actionLoading ? 0.7 : 1,
+              }}
+            >
+              ＋ Recharge Wallet
+            </button>
+            <button
+              type="button"
+              data-ocid="admin.wallet.deduct.button"
+              onClick={handleDeduct}
+              disabled={actionLoading}
+              style={{
+                flex: 1,
+                background: "#ef4444",
+                border: "none",
+                borderRadius: 10,
+                padding: "11px",
+                color: "white",
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer",
+                opacity: actionLoading ? 0.7 : 1,
+              }}
+            >
+              − Deduct from Wallet
+            </button>
+          </div>
+          <p
+            style={{
+              color: "rgba(255,255,255,0.3)",
+              fontSize: 11,
+              marginTop: 10,
+            }}
+          >
+            Use this when customer pays cash at the store. Manually adjust
+            wallet balance here.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
@@ -3629,6 +5234,8 @@ export default function AdminDashboard() {
     "order-history": "Order History",
     settings: "Settings",
     team: "Team & Access",
+    wallet: "Customer Wallet",
+    reviews: "Customer Reviews",
   };
 
   // ── View: Not logged in ──────────────────────────────────────────────────────
@@ -3777,6 +5384,26 @@ export default function AdminDashboard() {
             ocid="admin.team.tab"
             onClick={() => {
               setActiveSection("team");
+              setSidebarOpen(false);
+            }}
+          />
+          <NavItem
+            icon={Wallet}
+            label="Customer Wallet"
+            active={activeSection === "wallet"}
+            ocid="admin.wallet.tab"
+            onClick={() => {
+              setActiveSection("wallet");
+              setSidebarOpen(false);
+            }}
+          />
+          <NavItem
+            icon={Star}
+            label="Customer Reviews"
+            active={activeSection === "reviews"}
+            ocid="admin.reviews.tab"
+            onClick={() => {
+              setActiveSection("reviews");
               setSidebarOpen(false);
             }}
           />
@@ -3973,6 +5600,12 @@ export default function AdminDashboard() {
           )}
           {activeSection === "team" && (
             <TeamAccessSection actor={actor as unknown as backendInterface} />
+          )}
+          {activeSection === "wallet" && (
+            <WalletSection actor={actor as unknown as backendInterface} />
+          )}
+          {activeSection === "reviews" && (
+            <ReviewsAdminSection actor={actor as unknown as backendInterface} />
           )}
         </main>
       </div>

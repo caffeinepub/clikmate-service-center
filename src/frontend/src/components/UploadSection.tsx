@@ -29,6 +29,22 @@ const SERVICE_TYPES = [
   "PVC Smart Card",
 ];
 
+const PRINTING_SERVICES = ["B&W Bulk Printing", "Color Printing"];
+
+function detectPdfPageCount(buffer: ArrayBuffer): number {
+  try {
+    const bytes = new Uint8Array(buffer);
+    let text = "";
+    for (let i = 0; i < bytes.length; i++) {
+      text += String.fromCharCode(bytes[i]);
+    }
+    const matches = text.match(/\/Type\s*\/Page[^s]/g);
+    return matches ? matches.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default function UploadSection() {
   const { actor } = useActor();
   const [name, setName] = useState("");
@@ -40,20 +56,71 @@ export default function UploadSection() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [orderId, setOrderId] = useState<bigint | null>(null);
+  const [pageCount, setPageCount] = useState(0);
+  const [printType, setPrintType] = useState<"bw" | "color">("bw");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback((f: File) => {
-    const allowed = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
-    if (!allowed.includes(f.type)) {
-      toast.error("Only PDF and JPG/PNG files are allowed.");
-      return;
+  const isPrintingService = PRINTING_SERVICES.includes(serviceType);
+  const printRate = printType === "bw" ? 2 : 10;
+  const estimatedCost = pageCount * printRate;
+
+  const handleFile = useCallback(
+    async (f: File) => {
+      const allowed = [
+        "application/pdf",
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+      ];
+      if (!allowed.includes(f.type)) {
+        toast.error("Only PDF and JPG/PNG files are allowed.");
+        return;
+      }
+      if (f.size > 20 * 1024 * 1024) {
+        toast.error("File size must be under 20MB.");
+        return;
+      }
+      setFile(f);
+      setPageCount(0);
+
+      if (
+        f.type === "application/pdf" &&
+        PRINTING_SERVICES.includes(serviceType)
+      ) {
+        try {
+          const buffer = await f.arrayBuffer();
+          const count = detectPdfPageCount(buffer);
+          setPageCount(count);
+        } catch {
+          setPageCount(0);
+        }
+      }
+    },
+    [serviceType],
+  );
+
+  async function handleServiceTypeChange(value: string) {
+    setServiceType(value);
+    if (value === "B&W Bulk Printing") setPrintType("bw");
+    else if (value === "Color Printing") setPrintType("color");
+
+    // Re-detect page count if file already uploaded and it's a PDF printing service
+    if (
+      file &&
+      file.type === "application/pdf" &&
+      PRINTING_SERVICES.includes(value)
+    ) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const count = detectPdfPageCount(buffer);
+        setPageCount(count);
+      } catch {
+        setPageCount(0);
+      }
+    } else if (!PRINTING_SERVICES.includes(value)) {
+      setPageCount(0);
     }
-    if (f.size > 20 * 1024 * 1024) {
-      toast.error("File size must be under 20MB.");
-      return;
-    }
-    setFile(f);
-  }, []);
+  }
 
   function handleDrop(e: React.DragEvent<HTMLButtonElement>) {
     e.preventDefault();
@@ -126,6 +193,8 @@ export default function UploadSection() {
     setInstructions("");
     setFile(null);
     setOrderId(null);
+    setPageCount(0);
+    setPrintType("bw");
   }
 
   return (
@@ -245,7 +314,10 @@ export default function UploadSection() {
                 <Label className="text-sm font-semibold blue-text mb-1.5 block">
                   Service Type *
                 </Label>
-                <Select value={serviceType} onValueChange={setServiceType}>
+                <Select
+                  value={serviceType}
+                  onValueChange={handleServiceTypeChange}
+                >
                   <SelectTrigger
                     data-ocid="upload.service_type.select"
                     className="rounded-xl border-gray-200 focus:ring-blue-500"
@@ -261,6 +333,67 @@ export default function UploadSection() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Print Type Radio — only for printing services */}
+              {isPrintingService && (
+                <div>
+                  <Label className="text-sm font-semibold blue-text mb-2 block">
+                    Print Type *
+                  </Label>
+                  <div className="flex gap-3">
+                    <label
+                      htmlFor="print-bw"
+                      className={`flex items-center gap-3 flex-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                        printType === "bw"
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        id="print-bw"
+                        type="radio"
+                        data-ocid="upload.print_bw.radio"
+                        name="printType"
+                        value="bw"
+                        checked={printType === "bw"}
+                        onChange={() => setPrintType("bw")}
+                        className="accent-blue-600"
+                      />
+                      <div>
+                        <div className="font-semibold text-sm text-gray-800">
+                          ⬜ Black &amp; White
+                        </div>
+                        <div className="text-xs text-gray-500">₹2 / page</div>
+                      </div>
+                    </label>
+                    <label
+                      htmlFor="print-color"
+                      className={`flex items-center gap-3 flex-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                        printType === "color"
+                          ? "border-purple-500 bg-purple-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        id="print-color"
+                        type="radio"
+                        data-ocid="upload.print_color.radio"
+                        name="printType"
+                        value="color"
+                        checked={printType === "color"}
+                        onChange={() => setPrintType("color")}
+                        className="accent-purple-600"
+                      />
+                      <div>
+                        <div className="font-semibold text-sm text-gray-800">
+                          🎨 Color
+                        </div>
+                        <div className="text-xs text-gray-500">₹10 / page</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
 
               {/* File Upload */}
               <div>
@@ -308,6 +441,7 @@ export default function UploadSection() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setFile(null);
+                          setPageCount(0);
                         }}
                         className="ml-2 text-gray-400 hover:text-red-500 transition-colors"
                       >
@@ -345,6 +479,37 @@ export default function UploadSection() {
                   </p>
                 </div>
               </div>
+
+              {/* Cost Estimation Box */}
+              {isPrintingService && pageCount > 0 && (
+                <div
+                  data-ocid="upload.cost_estimate.card"
+                  className="rounded-2xl border-2 border-green-200 bg-green-50 px-6 py-4"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-green-700 font-semibold text-sm">
+                      📄 Print Cost Estimate
+                    </span>
+                  </div>
+                  <p className="text-gray-700 text-sm">
+                    <span className="font-semibold text-gray-900">
+                      {pageCount} pages
+                    </span>
+                    {" detected × ₹"}
+                    <span className="font-semibold text-gray-900">
+                      {printRate}/page
+                    </span>
+                    {" = "}
+                  </p>
+                  <p className="text-2xl font-extrabold text-green-700 mt-1">
+                    Total: ₹{estimatedCost}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    * Final price may vary based on paper type and binding
+                    options.
+                  </p>
+                </div>
+              )}
 
               {/* Instructions */}
               <div>

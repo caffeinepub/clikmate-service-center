@@ -1,4 +1,5 @@
 import type { backendInterface } from "@/backend.d";
+import WhatsAppFloatingButton from "@/components/WhatsAppButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ import {
   ShoppingBag,
   Store,
   Truck,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -33,7 +35,11 @@ export default function CheckoutPage() {
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">(
     "delivery",
   );
-  const [paymentMethod, setPaymentMethod] = useState<"upi" | "cod">("upi");
+  const [paymentMethod, setPaymentMethod] = useState<"upi" | "cod" | "wallet">(
+    "upi",
+  );
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [walletLoading, setWalletLoading] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
 
@@ -58,6 +64,18 @@ export default function CheckoutPage() {
       })
       .catch(() => setProfileLoaded(true));
   }, [actor, phone, profileLoaded]);
+
+  // Fetch wallet balance when wallet payment selected
+  useEffect(() => {
+    if (paymentMethod === "wallet" && actor && phone && walletBalance === 0) {
+      setWalletLoading(true);
+      (actor as unknown as backendInterface)
+        .getWalletBalance(phone)
+        .then((bal) => setWalletBalance(bal))
+        .catch(() => setWalletBalance(0))
+        .finally(() => setWalletLoading(false));
+    }
+  }, [paymentMethod, actor, phone, walletBalance]);
 
   async function saveProfile() {
     if (!actor || !phone) return;
@@ -86,6 +104,12 @@ export default function CheckoutPage() {
       toast.error("Your cart is empty.");
       return;
     }
+    if (paymentMethod === "wallet" && walletBalance < cartTotal) {
+      toast.error(
+        `Insufficient wallet balance (\u20b9${walletBalance.toFixed(0)} available).`,
+      );
+      return;
+    }
 
     setPlacing(true);
     try {
@@ -96,15 +120,45 @@ export default function CheckoutPage() {
         itemName: item.itemName,
         price: item.price,
       }));
+
+      if (paymentMethod === "wallet") {
+        // Deduct wallet first
+        const newBalance = await (
+          actor as unknown as backendInterface
+        ).deductWalletForOrder(phone, cartTotal);
+        if (newBalance < 0) {
+          toast.error(
+            "Insufficient wallet balance. Please choose another payment method.",
+          );
+          setPlacing(false);
+          return;
+        }
+        setWalletBalance(newBalance);
+      }
+
+      const paymentLabel =
+        paymentMethod === "upi"
+          ? "UPI"
+          : paymentMethod === "wallet"
+            ? "ClikMate Wallet"
+            : "Cash on Delivery";
+
       const order = await (actor as unknown as backendInterface).placeShopOrder(
         phone,
         name,
         deliveryMethod === "delivery" ? "Fast Local Delivery" : "Store Pickup",
         deliveryMethod === "delivery" ? address : "Awanti Vihar Shop, Raipur",
-        paymentMethod === "upi" ? "UPI" : "Cash on Delivery",
+        paymentLabel,
         backendItems,
         cartTotal,
       );
+
+      if (paymentMethod === "wallet") {
+        toast.success(
+          `Order placed! \u20b9${cartTotal.toFixed(0)} deducted from your wallet.`,
+        );
+      }
+
       clearCart();
       navigate(`/order-success/${order.id.toString()}`);
     } catch (e) {
@@ -114,6 +168,9 @@ export default function CheckoutPage() {
       setPlacing(false);
     }
   }
+
+  const walletInsufficient =
+    paymentMethod === "wallet" && walletBalance < cartTotal;
 
   if (cartItems.length === 0 && !placing) {
     return (
@@ -310,7 +367,9 @@ export default function CheckoutPage() {
               </h2>
               <RadioGroup
                 value={paymentMethod}
-                onValueChange={(v) => setPaymentMethod(v as "upi" | "cod")}
+                onValueChange={(v) =>
+                  setPaymentMethod(v as "upi" | "cod" | "wallet")
+                }
                 className="flex flex-col gap-3"
               >
                 <label
@@ -350,6 +409,58 @@ export default function CheckoutPage() {
                     <div className="text-sm text-gray-500">
                       Pay when you receive or at the store
                     </div>
+                  </div>
+                </label>
+
+                {/* ClikMate Wallet option */}
+                <label
+                  htmlFor="pay-wallet"
+                  data-ocid="checkout.wallet.radio"
+                  className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    paymentMethod === "wallet"
+                      ? "border-purple-500 bg-purple-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <RadioGroupItem
+                    value="wallet"
+                    id="pay-wallet"
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-purple-600" />
+                      Pay via ClikMate Wallet
+                    </div>
+                    <div className="text-sm text-gray-500 flex items-center gap-2 mt-0.5">
+                      {walletLoading ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <span>
+                          Balance:{" "}
+                          <span
+                            className={`font-semibold ${
+                              walletBalance >= cartTotal
+                                ? "text-green-600"
+                                : "text-red-500"
+                            }`}
+                          >
+                            ₹{walletBalance.toFixed(0)}
+                          </span>
+                          {" available"}
+                        </span>
+                      )}
+                    </div>
+                    {paymentMethod === "wallet" && walletInsufficient && (
+                      <div
+                        data-ocid="checkout.wallet.error_state"
+                        className="mt-2 flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"
+                      >
+                        ⚠️ Insufficient wallet balance (₹
+                        {walletBalance.toFixed(0)} available). Please choose
+                        another payment method.
+                      </div>
+                    )}
                   </div>
                 </label>
               </RadioGroup>
@@ -417,7 +528,7 @@ export default function CheckoutPage() {
                 data-ocid="checkout.place_order.button"
                 className="w-full mt-5 h-12 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold text-base"
                 onClick={handlePlaceOrder}
-                disabled={placing}
+                disabled={placing || walletInsufficient}
               >
                 {placing ? (
                   <>
@@ -438,6 +549,7 @@ export default function CheckoutPage() {
           </div>
         </div>
       </main>
+      <WhatsAppFloatingButton />
     </div>
   );
 }

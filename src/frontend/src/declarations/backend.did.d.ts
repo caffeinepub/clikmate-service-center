@@ -19,6 +19,7 @@ export interface BusinessInfo {
 }
 export interface CatalogItem {
   'id' : bigint,
+  'requiredDocuments' : string,
   'stockStatus' : string,
   'published' : boolean,
   'name' : string,
@@ -30,6 +31,7 @@ export interface CatalogItem {
   'mediaTypes' : Array<string>,
 }
 export interface CatalogItemInput {
+  'requiredDocuments' : string,
   'stockStatus' : string,
   'name' : string,
   'description' : string,
@@ -73,7 +75,12 @@ export interface OrderRecord {
   'phone' : string,
   'fileUrl' : string,
 }
-export interface Rider { 'pin' : string, 'name' : string, 'mobile' : string }
+export interface Rider {
+  'pin' : string,
+  'name' : string,
+  'role' : string,
+  'mobile' : string,
+}
 export interface ServiceOrder {
   'files' : Array<ExternalBlob>,
   'serviceType' : string,
@@ -88,8 +95,11 @@ export interface ShopOrder {
   'deliveryAddress' : string,
   'paymentMethod' : string,
   'deliveryOtp' : string,
+  'cscFinalOutput' : [] | [ExternalBlob],
   'createdAt' : bigint,
   'deliveryMethod' : string,
+  'cscDocuments' : Array<ExternalBlob>,
+  'cscSpecialDetails' : string,
   'totalAmount' : number,
   'phone' : string,
   'items' : Array<ShopOrderItem>,
@@ -100,6 +110,26 @@ export interface ShopOrderItem {
   'itemName' : string,
   'price' : number,
 }
+export interface TypesettingQuoteRequest {
+  'id' : bigint,
+  'status' : string,
+  'subject' : string,
+  'name' : string,
+  'submittedAt' : bigint,
+  'language' : string,
+  'phone' : string,
+  'format' : string,
+  'fileUrl' : string,
+}
+export interface TypesettingQuoteRequestInput {
+  'subject' : string,
+  'name' : string,
+  'language' : string,
+  'phone' : string,
+  'format' : string,
+  'fileUrl' : string,
+}
+export interface TypesettingQuoteUpdate { 'status' : string }
 export interface UpiSettings { 'upiId' : string, 'qrCodeUrl' : string }
 export interface UserProfile {
   'customerName' : [] | [string],
@@ -140,12 +170,16 @@ export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addCatalogItem' : ActorMethod<[CatalogItemInput], bigint>,
   'addRider' : ActorMethod<[string, string, string], undefined>,
+  'addTeamMember' : ActorMethod<[string, string, string, string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'claimAdminWithMasterKey' : ActorMethod<[string], boolean>,
+  'deductWallet' : ActorMethod<[string, number], number>,
+  'deductWalletForOrder' : ActorMethod<[string, number], number>,
   'deleteCatalogItem' : ActorMethod<[bigint], undefined>,
   'filterOrders' : ActorMethod<[FilterOrders], Array<OrderRecord>>,
   'generateOtp' : ActorMethod<[string], string>,
   'getAllCatalogItems' : ActorMethod<[], Array<CatalogItem>>,
-  'getAllShopOrders' : ActorMethod<[], Array<ShopOrder>>,
+  'getAllTypesettingQuotes' : ActorMethod<[], Array<TypesettingQuoteRequest>>,
   'getBusinessInfo' : ActorMethod<[], BusinessInfo>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
@@ -155,23 +189,34 @@ export interface _SERVICE {
     [] | [{ 'customerName' : string, 'deliveryAddress' : string }]
   >,
   'getInquiries' : ActorMethod<[], Array<Inquiry>>,
-  'getMyShopOrders' : ActorMethod<[string], Array<ShopOrder>>,
   'getOrdersByPhone' : ActorMethod<[string], Array<OrderRecord>>,
   'getPublishedCatalogItems' : ActorMethod<[], Array<CatalogItem>>,
   'getReadyForDeliveryOrders' : ActorMethod<[], Array<MaskedShopOrder>>,
   'getRiders' : ActorMethod<[], Array<Rider>>,
   'getUpiSettings' : ActorMethod<[], [] | [UpiSettings]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'getWalletBalance' : ActorMethod<[string], number>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'markOrderDelivered' : ActorMethod<[bigint, string], ShopOrder>,
+  'placeCscShopOrder' : ActorMethod<
+    [
+      string,
+      string,
+      string,
+      string,
+      string,
+      Array<ShopOrderItem>,
+      number,
+      Array<ExternalBlob>,
+      string,
+    ],
+    ShopOrder
+  >,
   'placeShopOrder' : ActorMethod<
     [string, string, string, string, string, Array<ShopOrderItem>, number],
     ShopOrder
   >,
-  'placeShopOrderWithOTP' : ActorMethod<
-    [string, string, string, string, string, Array<ShopOrderItem>, number],
-    ShopOrder
-  >,
+  'rechargeWallet' : ActorMethod<[string, number], number>,
   'removeRider' : ActorMethod<[string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'saveCustomerProfile' : ActorMethod<[string, string, string], undefined>,
@@ -180,12 +225,21 @@ export interface _SERVICE {
   'submitInquiry' : ActorMethod<[string, string, string], undefined>,
   'submitOrder' : ActorMethod<[string, string, string, string, string], bigint>,
   'submitOrderFull' : ActorMethod<[ServiceOrder], bigint>,
+  'submitTypesettingQuoteRequest' : ActorMethod<
+    [TypesettingQuoteRequestInput],
+    bigint
+  >,
   'togglePublishCatalogItem' : ActorMethod<[bigint], undefined>,
   'updateCatalogItem' : ActorMethod<[bigint, CatalogItemInput], undefined>,
   'updateOrderStatus' : ActorMethod<[bigint, string], undefined>,
-  'updateShopOrderStatus' : ActorMethod<[bigint, string], undefined>,
+  'updateTypesettingQuoteStatus' : ActorMethod<
+    [bigint, TypesettingQuoteUpdate],
+    undefined
+  >,
+  'uploadCscFinalOutput' : ActorMethod<[bigint, ExternalBlob], undefined>,
   'verifyOtp' : ActorMethod<[string, string], boolean>,
   'verifyRider' : ActorMethod<[string, string], boolean>,
+  'verifyStaff' : ActorMethod<[string, string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

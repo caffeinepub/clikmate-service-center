@@ -43,19 +43,33 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import type { ShopOrder } from "./backend.d";
+import type { backendInterface } from "./backend.d";
 import DashboardModal from "./components/DashboardModal";
+import EducatorServicesSection from "./components/EducatorServicesSection";
 import HeroIllustration from "./components/HeroIllustration";
 import LoginModal from "./components/LoginModal";
+import ReviewModal, {
+  getDismissedReviews,
+  getSubmittedReviews,
+  markReviewSubmitted,
+  markReviewDismissed,
+} from "./components/ReviewModal";
+import TestimonialsSection from "./components/TestimonialsSection";
 import UploadSection from "./components/UploadSection";
+import WhatsAppFloatingButton from "./components/WhatsAppButton";
 import { useActor } from "./hooks/useActor";
 import { usePublishedCatalogItems } from "./hooks/useQueries";
 import AdminDashboard from "./pages/AdminDashboard";
 import CheckoutPage from "./pages/CheckoutPage";
 import ItemDetailPage from "./pages/ItemDetailPage";
 import OrderSuccessPage from "./pages/OrderSuccessPage";
+import PosLoginPage from "./pages/PosLoginPage";
+import PosPage from "./pages/PosPage";
 import RiderDashboard from "./pages/RiderDashboard";
+import TeamPortalPage from "./pages/TeamPortalPage";
 
 function smoothScroll(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -1238,6 +1252,18 @@ function Footer() {
           </div>
         </div>
       </div>
+      {/* Internal portal link */}
+      <div className="border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-center">
+          <a
+            href="/#/portal"
+            data-ocid="footer.portal.link"
+            className="text-xs text-white/20 hover:text-white/40 transition-colors"
+          >
+            Internal &mdash; Employee &amp; Partner Login
+          </a>
+        </div>
+      </div>
       <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-white/40">
           <span>
@@ -1255,6 +1281,61 @@ function Footer() {
         </div>
       </div>
     </footer>
+  );
+}
+
+// ─── Review Queue Manager ─────────────────────────────────────────────────────
+function ReviewQueueManager({ loggedInPhone }: { loggedInPhone: string }) {
+  const { actor, isFetching } = useActor();
+  const [currentOrder, setCurrentOrder] = useState<ShopOrder | null>(null);
+  const queueRef = useRef<ShopOrder[]>([]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: queueRef is a stable ref
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    (actor as unknown as { getAllShopOrders?: () => Promise<ShopOrder[]> })
+      .getAllShopOrders?.()
+      .then((orders: ShopOrder[]) => {
+        const dismissed = getDismissedReviews();
+        const submitted = getSubmittedReviews();
+        const pending = orders.filter(
+          (o) =>
+            o.phone === loggedInPhone &&
+            (o.status === "Delivered" || o.status === "Completed") &&
+            !dismissed.includes(String(o.id)) &&
+            !submitted.includes(String(o.id)),
+        );
+        queueRef.current = pending;
+        if (pending.length > 0) setCurrentOrder(pending[0]);
+      })
+      .catch(() => {});
+  }, [actor, isFetching, loggedInPhone]);
+
+  function advanceQueue() {
+    queueRef.current = queueRef.current.slice(1);
+    const next = queueRef.current[0] ?? null;
+    if (next) setTimeout(() => setCurrentOrder(next), 400);
+  }
+
+  function handleDismiss() {
+    setCurrentOrder(null);
+    advanceQueue();
+  }
+
+  function handleSubmitted() {
+    setCurrentOrder(null);
+    advanceQueue();
+  }
+
+  if (!currentOrder) return null;
+  return (
+    <ReviewModal
+      order={currentOrder}
+      open={!!currentOrder}
+      customerPhone={loggedInPhone}
+      onDismiss={handleDismiss}
+      onSubmitted={handleSubmitted}
+    />
   );
 }
 
@@ -1301,17 +1382,21 @@ function LandingPage() {
   return (
     <>
       <Toaster richColors position="top-right" />
+      <WhatsAppFloatingButton />
       <Header auth={auth} onOpenCart={() => setCartOpen(true)} />
       <main>
         <HeroSection />
         <ServicesSection />
         <B2BSection />
+        <EducatorServicesSection />
         <UploadSection />
         <WhyUsSection />
+        <TestimonialsSection />
         <RetailSection />
         <ContactSection />
       </main>
       <Footer />
+      {loggedInPhone && <ReviewQueueManager loggedInPhone={loggedInPhone} />}
 
       {/* Modals */}
       <LoginModal
@@ -1349,6 +1434,9 @@ export default function App() {
           <Route path="/item/:id" element={<ItemDetailPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/rider" element={<RiderDashboard />} />
+          <Route path="/pos" element={<PosPage />} />
+          <Route path="/pos-login" element={<PosLoginPage />} />
+          <Route path="/portal" element={<TeamPortalPage />} />
           <Route
             path="/order-success/:orderId"
             element={<OrderSuccessPage />}

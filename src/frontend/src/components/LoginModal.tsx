@@ -82,7 +82,14 @@ export default function LoginModal({
     try {
       const valid = await actor?.verifyOtp(phone, code);
       if (valid) {
-        await actor?.saveCallerUserProfile({ name: "", phone });
+        // Save profile - don't let failure block login
+        try {
+          await actor?.saveCallerUserProfile({ name: "", phone });
+        } catch {
+          // profile save failed, login still succeeds
+        }
+        // Persist phone to localStorage for session restore
+        localStorage.setItem("clikmate_phone", phone);
         toast.success("Login successful! Welcome to ClikMate.");
         onLoginSuccess(phone);
         onOpenChange(false);

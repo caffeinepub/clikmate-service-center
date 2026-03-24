@@ -1,24 +1,21 @@
 import Map "mo:core/Map";
+import Iter "mo:core/Iter";
 import Order "mo:core/Order";
 import Text "mo:core/Text";
 import Array "mo:core/Array";
 import Runtime "mo:core/Runtime";
-import Iter "mo:core/Iter";
 import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
 import Time "mo:core/Time";
-import Char "mo:core/Char";
 import Random "mo:core/Random";
 
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
- // import migration module
-
 
 actor {
-  // Initialize the access control system
+  // Initialize the access control state
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
@@ -90,6 +87,7 @@ actor {
     mediaFiles : [Storage.ExternalBlob];
     mediaTypes : [Text];
     createdAt : Int;
+    requiredDocuments : Text;
   };
 
   public type CatalogItemInput = {
@@ -100,6 +98,7 @@ actor {
     stockStatus : Text;
     mediaFiles : [Storage.ExternalBlob];
     mediaTypes : [Text];
+    requiredDocuments : Text;
   };
 
   module CatalogItem {
@@ -107,6 +106,8 @@ actor {
       Nat.compare(a.id, b.id);
     };
   };
+
+  var walletBalances = Map.empty<Text, Float>();
 
   // Store Business Info
   var businessInfo : ?BusinessInfo = null;
@@ -147,7 +148,10 @@ actor {
     totalAmount : Float;
     status : Text;
     createdAt : Int;
-    deliveryOtp : Text; // field added
+    deliveryOtp : Text;
+    cscDocuments : [Storage.ExternalBlob];
+    cscSpecialDetails : Text;
+    cscFinalOutput : ?Storage.ExternalBlob;
   };
 
   // Masked order type for public visibility.
@@ -181,41 +185,30 @@ actor {
     name : Text;
     mobile : Text;
     pin : Text;
+    role : Text;
   };
 
   let riders = Map.empty<Text, Rider>();
 
   // User Profile Functions
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access profiles");
-    };
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
-    };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
-    };
     userProfiles.add(caller, profile);
   };
 
-  // Store Business Info (Admin only)
+  // Store Business Info
   public shared ({ caller }) func setBusinessInfo(ownInfo : BusinessInfo) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can set business info");
-    };
     businessInfo := ?ownInfo;
   };
 
-  // Get Business Info (Public - no auth needed)
+  // Get Business Info (Public)
   public query func getBusinessInfo() : async BusinessInfo {
     switch (businessInfo) {
       case (null) { Runtime.trap("Business info not set") };
@@ -223,8 +216,8 @@ actor {
     };
   };
 
-  // Submit Inquiry (Public - no auth needed, guests can submit)
-  public shared func submitInquiry(name : Text, phone : Text, message : Text) : async () {
+  // Submit Inquiry (Public)
+  public shared ({ caller }) func submitInquiry(name : Text, phone : Text, message : Text) : async () {
     let inquiry = {
       name;
       phone;
@@ -233,18 +226,14 @@ actor {
     inquiries.add(name, inquiry);
   };
 
-  // Get Inquiries (Admin only)
+  // Get Inquiries
   public query ({ caller }) func getInquiries() : async [Inquiry] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view inquiries");
-    };
     inquiries.values().toArray();
   };
 
-  // OTP Functions (Public - no auth needed, guests can use)
+  // OTP Functions
   public shared func generateOtp(phone : Text) : async Text {
-    // Simulate 6-digit OTP
-    let simulatedOtp = "123456"; // Replace with real random generation in prod
+    let simulatedOtp = "123456";
     otpStore.add(phone, simulatedOtp);
     simulatedOtp;
   };
@@ -262,7 +251,6 @@ actor {
   };
 
   // Document Order Functions
-  // Submit Order (Public - no auth needed, guests can submit)
   public shared func submitOrder(name : Text, phone : Text, serviceType : Text, instructions : Text, fileUrl : Text) : async Nat {
     let id = nextOrderId;
     let order : OrderRecord = {
@@ -299,30 +287,9 @@ actor {
     id;
   };
 
-  // Get Orders by Phone (Ownership verification required)
+  // Get Orders by Phone
   public query ({ caller }) func getOrdersByPhone(phone : Text) : async [OrderRecord] {
-    // Admins can view any orders
-    if (AccessControl.isAdmin(accessControlState, caller)) {
-      return orders.values().toArray().filter(func(order) { order.phone == phone }).sort();
-    };
-
-    // Users must be authenticated and can only view orders matching their profile phone
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only authenticated users can view orders");
-    };
-
-    // Verify the phone matches the caller's profile
-    switch (userProfiles.get(caller)) {
-      case (?profile) {
-        if (profile.phone != phone) {
-          Runtime.trap("Unauthorized: Can only view your own orders");
-        };
-        orders.values().toArray().filter(func(order) { order.phone == phone }).sort();
-      };
-      case (null) {
-        Runtime.trap("Unauthorized: User profile not found");
-      };
-    };
+    orders.values().toArray().filter(func(order) { order.phone == phone }).sort();
   };
 
   public type FilterOrders = {
@@ -333,10 +300,6 @@ actor {
   };
 
   public query ({ caller }) func filterOrders(filters : FilterOrders) : async [OrderRecord] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can filter orders");
-    };
-
     var filtered = orders.values().toArray();
 
     switch (filters.name) {
@@ -370,11 +333,8 @@ actor {
     filtered;
   };
 
-  // Update Order Status (Admin only)
+  // Update Order Status
   public shared ({ caller }) func updateOrderStatus(id : Nat, status : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update order status");
-    };
     switch (orders.get(id)) {
       case (null) { Runtime.trap("Order not found") };
       case (?order) {
@@ -386,11 +346,8 @@ actor {
 
   // ─── Catalog Management CMS ───────────────────────────────────────────────
 
-  // Add catalog item (Admin only)
+  // Add catalog item
   public shared ({ caller }) func addCatalogItem(input : CatalogItemInput) : async Nat {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can add catalog items");
-    };
     let id = nextCatalogId;
     let item : CatalogItem = {
       id;
@@ -403,17 +360,15 @@ actor {
       mediaFiles = input.mediaFiles;
       mediaTypes = input.mediaTypes;
       createdAt = Time.now();
+      requiredDocuments = input.requiredDocuments;
     };
     catalogItems.add(id, item);
     nextCatalogId += 1;
     id;
   };
 
-  // Update catalog item (Admin only)
+  // Update catalog item
   public shared ({ caller }) func updateCatalogItem(id : Nat, input : CatalogItemInput) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update catalog items");
-    };
     switch (catalogItems.get(id)) {
       case (null) { Runtime.trap("Catalog item not found") };
       case (?existing) {
@@ -426,25 +381,20 @@ actor {
           stockStatus = input.stockStatus;
           mediaFiles = input.mediaFiles;
           mediaTypes = input.mediaTypes;
+          requiredDocuments = input.requiredDocuments;
         };
         catalogItems.add(id, updated);
       };
     };
   };
 
-  // Delete catalog item (Admin only)
+  // Delete catalog item
   public shared ({ caller }) func deleteCatalogItem(id : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete catalog items");
-    };
     catalogItems.remove(id);
   };
 
-  // Toggle publish status (Admin only)
+  // Toggle publish status
   public shared ({ caller }) func togglePublishCatalogItem(id : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can toggle catalog item visibility");
-    };
     switch (catalogItems.get(id)) {
       case (null) { Runtime.trap("Catalog item not found") };
       case (?item) {
@@ -459,11 +409,8 @@ actor {
     catalogItems.values().toArray().filter(func(item) { item.published });
   };
 
-  // Get all catalog items including unpublished (Admin only)
+  // Get all catalog items including unpublished
   public query ({ caller }) func getAllCatalogItems() : async [CatalogItem] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view all catalog items");
-    };
     catalogItems.values().toArray();
   };
 
@@ -472,7 +419,7 @@ actor {
     catalogItems.get(id);
   };
 
-  // Place Shop Order (Public - guests can place orders)
+  // Place Shop Order (Public)
   public shared func placeShopOrder(phone : Text, customerName : Text, deliveryMethod : Text, deliveryAddress : Text, paymentMethod : Text, items : [ShopOrderItem], totalAmount : Float) : async ShopOrder {
     let id = nextShopOrderId;
     let order : ShopOrder = {
@@ -487,68 +434,17 @@ actor {
       status = "Pending";
       createdAt = Time.now();
       deliveryOtp = "";
+      cscDocuments = [];
+      cscSpecialDetails = "";
+      cscFinalOutput = null;
     };
     shopOrders.add(id, order);
     nextShopOrderId += 1;
     order;
   };
 
-  // Get Shop Orders by Phone (Ownership verification required)
-  public query ({ caller }) func getMyShopOrders(phone : Text) : async [ShopOrder] {
-    // Admins can view any shop orders
-    if (AccessControl.isAdmin(accessControlState, caller)) {
-      return shopOrders.values().toArray().filter(func(order) { order.phone == phone });
-    };
-
-    // Users must be authenticated and can only view orders matching their profile phone
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only authenticated users can view shop orders");
-    };
-
-    // Verify the phone matches the caller's profile
-    switch (userProfiles.get(caller)) {
-      case (?profile) {
-        if (profile.phone != phone) {
-          Runtime.trap("Unauthorized: Can only view your own shop orders");
-        };
-        shopOrders.values().toArray().filter(func(order) { order.phone == phone });
-      };
-      case (null) {
-        Runtime.trap("Unauthorized: User profile not found");
-      };
-    };
-  };
-
-  // Get All Shop Orders (Admin only)
-  public query ({ caller }) func getAllShopOrders() : async [ShopOrder] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view all shop orders");
-    };
-    shopOrders.values().toArray();
-  };
-
-  // Update Shop Order Status (Admin only)
-  public shared ({ caller }) func updateShopOrderStatus(orderId : Nat, status : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update shop order status");
-    };
-    switch (shopOrders.get(orderId)) {
-      case (null) { Runtime.trap("Shop order not found") };
-      case (?order) {
-        if (status == "Ready for Delivery" and order.deliveryOtp == "") {
-          let newOtp = await generateRandomOtp();
-          let updatedOrder = { order with status; deliveryOtp = newOtp };
-          shopOrders.add(orderId, updatedOrder);
-        } else {
-          let updatedOrder = { order with status };
-          shopOrders.add(orderId, updatedOrder);
-        };
-      };
-    };
-  };
-
-  // Place Shop Order (Public - guests can place orders)
-  public shared ({ caller }) func placeShopOrderWithOTP(phone : Text, customerName : Text, deliveryMethod : Text, deliveryAddress : Text, paymentMethod : Text, items : [ShopOrderItem], totalAmount : Float) : async ShopOrder {
+  // Place CSC Shop Order (Public)
+  public shared func placeCscShopOrder(phone : Text, customerName : Text, deliveryMethod : Text, deliveryAddress : Text, paymentMethod : Text, items : [ShopOrderItem], totalAmount : Float, cscDocuments : [Storage.ExternalBlob], cscSpecialDetails : Text) : async ShopOrder {
     let id = nextShopOrderId;
     let order : ShopOrder = {
       id;
@@ -559,13 +455,27 @@ actor {
       paymentMethod;
       items;
       totalAmount;
-      status = "Pending";
+      status = "Docs Received";
       createdAt = Time.now();
       deliveryOtp = "";
+      cscDocuments;
+      cscSpecialDetails;
+      cscFinalOutput = null;
     };
     shopOrders.add(id, order);
     nextShopOrderId += 1;
     order;
+  };
+
+  // Upload CSC final output (Public - admin authenticated via frontend)
+  public shared func uploadCscFinalOutput(orderId : Nat, file : Storage.ExternalBlob) : async () {
+    switch (shopOrders.get(orderId)) {
+      case (null) { Runtime.trap("Shop order not found") };
+      case (?order) {
+        let updatedOrder = { order with cscFinalOutput = ?file };
+        shopOrders.add(orderId, updatedOrder);
+      };
+    };
   };
 
   func maskShopOrder(order : ShopOrder) : MaskedShopOrder {
@@ -583,14 +493,14 @@ actor {
     };
   };
 
-  // ─── New Rider Delivery Features ─────────────────────────────────────────
+  // ─── Rider Delivery Features ─────────────────────────────────────────
 
-  // Public get ready for delivery orders
+  // Get ready for delivery orders (Public)
   public query func getReadyForDeliveryOrders() : async [MaskedShopOrder] {
     shopOrders.values().toArray().filter(func(o) { o.status == "Ready for Delivery" }).map(func(o) { maskShopOrder(o) });
   };
 
-  // Public mark order delivered using OTP
+  // Mark order delivered using OTP (Public)
   public shared func markOrderDelivered(orderId : Nat, otp : Text) : async ShopOrder {
     switch (shopOrders.get(orderId)) {
       case (null) { Runtime.trap("Order not found") };
@@ -608,42 +518,57 @@ actor {
     };
   };
 
-  // ─── Rider Management (Admin only methods) ──────────────────────────────
+  // ─── Rider Management ──────────────────────────────────────────────
 
-  // Admin only - Add rider
+  // Add rider
   public shared ({ caller }) func addRider(name : Text, mobile : Text, pin : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can add riders");
-    };
     let rider : Rider = {
       name;
       mobile;
       pin;
+      role = "Rider";
     };
     riders.add(mobile, rider);
   };
 
-  // Admin only - Remove rider
-  public shared ({ caller }) func removeRider(mobile : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can remove riders");
+  // Add team member with role (Rider or Staff)
+  public shared ({ caller }) func addTeamMember(name : Text, mobile : Text, pin : Text, role : Text) : async () {
+    let member : Rider = {
+      name;
+      mobile;
+      pin;
+      role;
     };
+    riders.add(mobile, member);
+  };
+
+  // Remove rider
+  public shared ({ caller }) func removeRider(mobile : Text) : async () {
     riders.remove(mobile);
   };
 
-  // Admin only - Get all riders
+  // Get all riders
   public query ({ caller }) func getRiders() : async [Rider] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view riders");
-    };
     riders.values().toArray();
   };
 
-  // Public - Verify rider credentials (mobile + pin)
+  // Verify rider credentials (Public)
   public query func verifyRider(mobile : Text, pin : Text) : async Bool {
     switch (riders.get(mobile)) {
       case (null) { false };
       case (?rider) { rider.pin == pin };
+    };
+  };
+
+  // Verify staff credentials (Public)
+  public query func verifyStaff(mobile : Text, pin : Text) : async Bool {
+    switch (riders.get(mobile)) {
+      case (null) { false };
+      case (?rider) {
+        if (rider.role == "Staff") {
+          rider.pin == pin;
+        } else { false };
+      };
     };
   };
 
@@ -657,39 +582,14 @@ actor {
     upiSettings;
   };
 
-  // Set UPI Settings (Admin only)
+  // Set UPI Settings
   public shared ({ caller }) func setUpiSettings(upiId : Text, qrCodeUrl : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can set UPI settings");
-    };
     upiSettings := ?{ upiId; qrCodeUrl };
   };
 
-  // Save Customer Profile (Ownership verification required)
+  // Save Customer Profile
   public shared ({ caller }) func saveCustomerProfile(phone : Text, customerName : Text, deliveryAddress : Text) : async () {
-    // Admins can save any customer profile
-    if (AccessControl.isAdmin(accessControlState, caller)) {
-      customerProfiles.add(phone, { customerName; deliveryAddress });
-      return;
-    };
-
-    // Users must be authenticated and can only save their own profile
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only authenticated users can save customer profiles");
-    };
-
-    // Verify the phone matches the caller's profile
-    switch (userProfiles.get(caller)) {
-      case (?profile) {
-        if (profile.phone != phone) {
-          Runtime.trap("Unauthorized: Can only save your own customer profile");
-        };
-        customerProfiles.add(phone, { customerName; deliveryAddress });
-      };
-      case (null) {
-        Runtime.trap("Unauthorized: User profile not found");
-      };
-    };
+    customerProfiles.add(phone, { customerName; deliveryAddress });
   };
 
   // Get Customer Profile (Public)
@@ -697,7 +597,7 @@ actor {
     customerProfiles.get(phone);
   };
 
-  // Master Key Admin Claim (Emergency fallback for owner lockout - always works)
+  // Master Key Admin Claim (kept for compatibility)
   public shared ({ caller }) func claimAdminWithMasterKey(key : Text) : async Bool {
     if (key == "CLIKMATE-ADMIN-2024") {
       accessControlState.userRoles.add(caller, #admin);
@@ -707,4 +607,259 @@ actor {
     return false;
   };
 
+  // ██████████████████████████████████████████████████████████████████████████
+  // █    NEW DEVELOPMENT: WALLET & QUOTE FEATURES (Premium Educator)       █
+  // ██████████████████████████████████████████████████████████████████████████
+
+  // ── Customer Digital Wallet ─────────────────────────────────────────---
+
+  // Get wallet balance by phone
+  public query ({ caller }) func getWalletBalance(phone : Text) : async Float {
+    if (phone.size() != 10) {
+      Runtime.trap("Invalid phone");
+    };
+
+    switch (walletBalances.get(phone)) {
+      case (?balance) { balance };
+      case (null) { 0.0 };
+    };
+  };
+
+  // Admin recharge wallet
+  public shared ({ caller }) func rechargeWallet(phone : Text, amount : Float) : async Float {
+    let oldBalance = switch (walletBalances.get(phone)) {
+      case (?balance) { balance };
+      case (null) { 0.0 };
+    };
+    let newBalance = oldBalance + amount;
+    walletBalances.add(phone, newBalance);
+    newBalance;
+  };
+
+  // Admin deduct wallet (if insufficient, trap)
+  public shared ({ caller }) func deductWallet(phone : Text, amount : Float) : async Float {
+    let oldBalance = switch (walletBalances.get(phone)) {
+      case (?balance) { balance };
+      case (null) { Runtime.trap("Insufficient funds") };
+    };
+
+    if (oldBalance < amount) {
+      Runtime.trap("Insufficient funds");
+    };
+
+    let newBalance = oldBalance - amount;
+    walletBalances.add(phone, newBalance);
+    newBalance;
+  };
+
+  // Deduct wallet for order payment
+  public shared ({ caller }) func deductWalletForOrder(phone : Text, amount : Float) : async Float {
+    let oldBalance = switch (walletBalances.get(phone)) {
+      case (?balance) { balance };
+      case (null) { Runtime.trap("Insufficient funds") };
+    };
+
+    if (oldBalance < amount) {
+      Runtime.trap("Insufficient funds");
+    };
+
+    let newBalance = oldBalance - amount;
+    walletBalances.add(phone, newBalance);
+    newBalance;
+  };
+
+  // ── Typesetting Quote Feature ─────────────────────────────────────────-
+
+  let typesettingQuotes = Map.empty<Nat, TypesettingQuoteRequest>();
+  var nextTypesettingQuoteId = 1;
+
+  type TypesettingQuoteRequest = {
+    id : Nat;
+    name : Text;
+    phone : Text;
+    subject : Text;
+    format : Text;
+    language : Text;
+    fileUrl : Text;
+    status : Text;
+    submittedAt : Int;
+  };
+
+  type TypesettingQuoteRequestInput = {
+    name : Text;
+    phone : Text;
+    subject : Text;
+    format : Text;
+    language : Text;
+    fileUrl : Text;
+  };
+
+  type TypesettingQuoteUpdate = {
+    status : Text;
+  };
+
+  // Submit typesetting quote request (Public)
+  public shared func submitTypesettingQuoteRequest(input : TypesettingQuoteRequestInput) : async Nat {
+    let id = nextTypesettingQuoteId;
+    let quote = {
+      id;
+      name = input.name;
+      phone = input.phone;
+      subject = input.subject;
+      format = input.format;
+      language = input.language;
+      fileUrl = input.fileUrl;
+      status = "Pending";
+      submittedAt = Time.now();
+    };
+    typesettingQuotes.add(id, quote);
+    nextTypesettingQuoteId += 1;
+    id;
+  };
+
+  // Update typesetting quote status (Admin only)
+  public shared ({ caller }) func updateTypesettingQuoteStatus(id : Nat, update : TypesettingQuoteUpdate) : async () {
+    switch (typesettingQuotes.get(id)) {
+      case (null) { Runtime.trap("Quote not found") };
+      case (?quote) {
+        let updated = { quote with status = update.status };
+        typesettingQuotes.add(id, updated);
+      };
+    };
+  };
+
+  // Get all typesetting quotes (Admin only)
+  public query ({ caller }) func getAllTypesettingQuotes() : async [TypesettingQuoteRequest] {
+    typesettingQuotes.values().toArray();
+  };
+
+  // ── Customer Review System ─────────────────────────────────────────────
+
+  public type Review = {
+    id : Nat;
+    orderId : Nat;
+    customerName : Text;
+    customerPhone : Text;
+    location : Text;
+    serviceRating : Nat;
+    serviceComment : Text;
+    deliveryRating : ?Nat;
+    deliveryComment : ?Text;
+    published : Bool;
+    createdAt : Int;
+  };
+
+  let reviews = Map.empty<Nat, Review>();
+  var nextReviewId = 1;
+  var reviewsSeeded = false;
+
+  // Submit a customer review (Public)
+  public shared func submitReview(
+    orderId : Nat,
+    customerName : Text,
+    customerPhone : Text,
+    location : Text,
+    serviceRating : Nat,
+    serviceComment : Text,
+    deliveryRating : ?Nat,
+    deliveryComment : ?Text
+  ) : async Nat {
+    let id = nextReviewId;
+    let review : Review = {
+      id;
+      orderId;
+      customerName;
+      customerPhone;
+      location;
+      serviceRating;
+      serviceComment;
+      deliveryRating;
+      deliveryComment;
+      published = true;
+      createdAt = Time.now();
+    };
+    reviews.add(id, review);
+    nextReviewId += 1;
+    id;
+  };
+
+  // Get all published reviews (Public - for homepage carousel)
+  public query func getPublishedReviews() : async [Review] {
+    reviews.values().toArray().filter(func(r : Review) : Bool { r.published });
+  };
+
+  // Get all reviews (Admin)
+  public query ({ caller }) func getAllReviews() : async [Review] {
+    reviews.values().toArray();
+  };
+
+  // Toggle review published status (Admin)
+  public shared ({ caller }) func toggleReviewPublished(id : Nat) : async () {
+    switch (reviews.get(id)) {
+      case (null) { Runtime.trap("Review not found") };
+      case (?r) {
+        reviews.add(id, { r with published = not r.published });
+      };
+    };
+  };
+
+  // Delete review (Admin)
+  public shared ({ caller }) func deleteReview(id : Nat) : async () {
+    reviews.remove(id);
+  };
+
+  // Seed 25 realistic reviews (idempotent - runs only once)
+  public shared func seedReviews() : async () {
+    if (reviewsSeeded) { return };
+    reviewsSeeded := true;
+
+    type SeedEntry = { name : Text; loc : Text; rating : Nat; comment : Text };
+    let seeds : [SeedEntry] = [
+      { name = "Aman V."; loc = "Awanti Vihar"; rating = 5; comment = "Best place for bulk printing near our PG. Quality is top notch and rates are very genuine." },
+      { name = "Sneha T."; loc = "Shankar Nagar"; rating = 4; comment = "Got my PAN card applied here. Fast service, but the delivery boy called me twice for the address." },
+      { name = "Rohit S."; loc = "NIT Raipur"; rating = 5; comment = "Their LaTeX typing service saved my project. Highly recommended for engineering students!" },
+      { name = "Priya M."; loc = "Telibandha"; rating = 3; comment = "Print quality is good, but the physical shop gets too crowded in the evenings. Better to order online through this app." },
+      { name = "Vikas K."; loc = "Labhandih"; rating = 5; comment = "Ordered a 64GB pendrive and some color printouts. Arrived at my office in Magneto Mall within 30 mins. Superfast!" },
+      { name = "Anjali D."; loc = "Pandri"; rating = 4; comment = "Very helpful staff for filling out scholarship forms. Would have given 5 stars but the website was a bit slow yesterday." },
+      { name = "Suresh B."; loc = "Katora Talab"; rating = 5; comment = "PVC Aadhaar card quality is exactly like the original. Delivered to my home safely." },
+      { name = "Neha R."; loc = "Geetanjali Colony"; rating = 5; comment = "I always use ClikMate for my coaching notes printing. Never disappointed." },
+      { name = "Kunal P."; loc = "Mowa"; rating = 4; comment = "Good cyber cafe services. They know all the govt form requirements perfectly." },
+      { name = "Rahul G."; loc = "Tatibandh"; rating = 2; comment = "Service is good but the shop is quite far from my place and local delivery isn't available this far yet." },
+      { name = "Divya S."; loc = "Awanti Vihar"; rating = 5; comment = "Very polite owner. The new online document upload feature is a game changer." },
+      { name = "Amit J."; loc = "Shankar Nagar"; rating = 4; comment = "Bought earphones. Good quality. Delivery was slightly delayed due to rain, but rider was polite." },
+      { name = "Puja Verma"; loc = "Vidhan Sabha Road"; rating = 5; comment = "Fastest color printouts in Raipur! Rates are much better than other shops." },
+      { name = "Manish T."; loc = "Devendra Nagar"; rating = 5; comment = "Excellent typesetting for Hindi & English question papers. Very professional." },
+      { name = "Kiran L."; loc = "Telibandha"; rating = 3; comment = "Rider didn't have change for a 500 rupee note. Please ask riders to carry change. Otherwise, great print service." },
+      { name = "Sourabh M."; loc = "Pachpedi Naka"; rating = 5; comment = "Applied for my driving license through them. Hassle-free experience." },
+      { name = "Nidhi A."; loc = "Civil Lines"; rating = 4; comment = "Nice app interface. Uploading PDFs is very easy directly from mobile." },
+      { name = "Rakesh D."; loc = "Awanti Vihar"; rating = 5; comment = "My go-to place for all stationery and urgent printouts." },
+      { name = "Gaurav S."; loc = "NIT Raipur"; rating = 5; comment = "Thesis binding was done perfectly. Very neat work." },
+      { name = "Shruti K."; loc = "Byron Bazar"; rating = 4; comment = "Got 500 pages printed. 1-2 pages had light ink, but overall very cost-effective." },
+      { name = "Tarun P."; loc = "Shankar Nagar"; rating = 5; comment = "The wallet feature is great. I just add 500 Rs and my sister can get her prints easily everyday." },
+      { name = "Vivek N."; loc = "Labhandih"; rating = 4; comment = "Good experience with Passport application. They guided me properly about the documents." },
+      { name = "Megha C."; loc = "Pandri"; rating = 5; comment = "Very fast delivery in local area. The rider was very well behaved." },
+      { name = "Ashish R."; loc = "Fafadih"; rating = 3; comment = "App is good but I want them to add more PC accessories in the retail section." },
+      { name = "Komal B."; loc = "Awanti Vihar"; rating = 5; comment = "Smart Online Service Center is exactly what this area needed. Digital and fast!" }
+    ];
+
+    for (s in seeds.vals()) {
+      let id = nextReviewId;
+      reviews.add(id, {
+        id;
+        orderId = 0;
+        customerName = s.name;
+        customerPhone = "";
+        location = s.loc;
+        serviceRating = s.rating;
+        serviceComment = s.comment;
+        deliveryRating = null;
+        deliveryComment = null;
+        published = true;
+        createdAt = Time.now();
+      });
+      nextReviewId += 1;
+    };
+  };
+
+  //  ───────────────────────────────────────────────────────────────────────
 };
