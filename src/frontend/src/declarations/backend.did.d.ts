@@ -42,6 +42,16 @@ export interface CatalogItemInput {
   'mediaFiles' : Array<ExternalBlob>,
   'mediaTypes' : Array<string>,
 }
+export interface ExpenseEntry {
+  'id' : bigint,
+  'date' : string,
+  'note' : string,
+  'createdAt' : bigint,
+  'addedBy' : string,
+  'paymentMode' : string,
+  'category' : string,
+  'amount' : number,
+}
 export type ExternalBlob = Uint8Array;
 export interface FilterOrders {
   'status' : [] | [string],
@@ -59,6 +69,15 @@ export interface KhataEntry {
   'lastUpdated' : bigint,
   'totalDue' : number,
   'phone' : string,
+}
+export interface ManualIncomeEntry {
+  'id' : bigint,
+  'date' : string,
+  'createdAt' : bigint,
+  'description' : string,
+  'paymentMode' : string,
+  'category' : string,
+  'amount' : number,
 }
 export interface MaskedShopOrder {
   'id' : bigint,
@@ -207,7 +226,15 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addCatalogItem' : ActorMethod<[CatalogItemInput], bigint>,
+  'addExpense' : ActorMethod<
+    [string, number, string, string, string, string],
+    bigint
+  >,
   'addKhataDue' : ActorMethod<[string, string, number], number>,
+  'addManualIncome' : ActorMethod<
+    [string, number, string, string, string],
+    bigint
+  >,
   'addRider' : ActorMethod<[string, string, string], undefined>,
   'addTeamMember' : ActorMethod<[string, string, string, string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
@@ -216,6 +243,8 @@ export interface _SERVICE {
   'deductWallet' : ActorMethod<[string, number], number>,
   'deductWalletForOrder' : ActorMethod<[string, number], number>,
   'deleteCatalogItem' : ActorMethod<[bigint], undefined>,
+  'deleteExpense' : ActorMethod<[bigint], undefined>,
+  'deleteManualIncome' : ActorMethod<[bigint], undefined>,
   'deleteReview' : ActorMethod<[bigint], undefined>,
   'exportBulkLeadsToCsv' : ActorMethod<[], string>,
   'filterOrders' : ActorMethod<[FilterOrders], Array<OrderRecord>>,
@@ -232,8 +261,10 @@ export interface _SERVICE {
     [string],
     [] | [{ 'customerName' : string, 'deliveryAddress' : string }]
   >,
+  'getExpenses' : ActorMethod<[], Array<ExpenseEntry>>,
   'getInquiries' : ActorMethod<[], Array<Inquiry>>,
   'getKhataEntry' : ActorMethod<[string], [] | [KhataEntry]>,
+  'getManualIncomes' : ActorMethod<[], Array<ManualIncomeEntry>>,
   'getOrdersByPhone' : ActorMethod<[string], Array<OrderRecord>>,
   'getPosSales' : ActorMethod<[], Array<PosSale>>,
   'getPosSalesByPhone' : ActorMethod<[string], Array<PosSale>>,
@@ -271,6 +302,7 @@ export interface _SERVICE {
     bigint
   >,
   'removeRider' : ActorMethod<[string], undefined>,
+  'resetStaffPin' : ActorMethod<[string, string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'saveCustomerProfile' : ActorMethod<[string, string, string], undefined>,
   'seedReviews' : ActorMethod<[], undefined>,
@@ -299,8 +331,16 @@ export interface _SERVICE {
   'togglePublishCatalogItem' : ActorMethod<[bigint], undefined>,
   'toggleReviewPublished' : ActorMethod<[bigint], undefined>,
   'updateCatalogItem' : ActorMethod<[bigint, CatalogItemInput], undefined>,
+  'updateExpense' : ActorMethod<
+    [bigint, string, number, string, string, string],
+    undefined
+  >,
   'updateLeadFinalPdf' : ActorMethod<[bigint, string], undefined>,
   'updateLeadQuoteNotes' : ActorMethod<[bigint, string], undefined>,
+  'updateManualIncome' : ActorMethod<
+    [bigint, string, number, string, string, string],
+    undefined
+  >,
   'updateOrderStatus' : ActorMethod<[bigint, string], undefined>,
   'updateTypesettingQuoteStatus' : ActorMethod<
     [bigint, TypesettingQuoteUpdate],

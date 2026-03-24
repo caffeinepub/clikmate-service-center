@@ -45,7 +45,7 @@ const COLUMNS: {
   },
   {
     key: "quoted",
-    label: "Quote Sent & Confirmed",
+    label: "Quote Confirmed",
     statuses: ["Quote Sent", "Confirmed"],
     borderColor: "#60a5fa",
     icon: <CheckCircle2 className="w-4 h-4" />,
@@ -59,8 +59,12 @@ const COLUMNS: {
   },
   {
     key: "ready",
-    label: "Ready for Print & Delivery",
-    statuses: ["Ready for Print & Delivery", "Ready"],
+    label: "Ready for Print / Delivery",
+    statuses: [
+      "Ready for Print & Delivery",
+      "Ready for Print / Delivery",
+      "Ready",
+    ],
     borderColor: "#4ade80",
     icon: <Truck className="w-4 h-4" />,
   },
@@ -68,9 +72,9 @@ const COLUMNS: {
 
 const STATUS_MAP: Record<ColumnKey, string> = {
   new: "Pending Quote",
-  quoted: "Quote Sent",
+  quoted: "Quote Confirmed",
   typesetting: "Typesetting in Progress",
-  ready: "Ready for Print & Delivery",
+  ready: "Ready for Print / Delivery",
 };
 
 function formatDate(ts: bigint): string {
@@ -81,30 +85,48 @@ function formatDate(ts: bigint): string {
   });
 }
 
-// ---- Status badge ---------------------------------------------------------
+// Derive "LaTeX" vs "Standard PDF" badge from language field
+function getTypeBadge(language: string): "LaTeX" | "Standard PDF" {
+  const lang = language.toLowerCase();
+  if (
+    lang.includes("hindi") ||
+    lang.includes("bilingual") ||
+    lang.includes("noto")
+  ) {
+    return "LaTeX";
+  }
+  return "Standard PDF";
+}
 
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    "Pending Quote": "#f59e0b",
-    Pending: "#f59e0b",
-    "Quote Sent": "#60a5fa",
-    Confirmed: "#34d399",
-    "Typesetting in Progress": "#c084fc",
-    Printing: "#c084fc",
-    "Ready for Print & Delivery": "#4ade80",
-    Ready: "#4ade80",
-  };
-  const color = colors[status] ?? "#94a3b8";
+// Derive font name from language field
+function getFontName(language: string): string {
+  const lang = language.toLowerCase();
+  if (lang.includes("hindi") || lang.includes("noto")) return "Noto Serif";
+  if (lang.includes("bilingual")) return "Noto Serif + Times New Roman";
+  if (lang.includes("times") || lang.includes("english"))
+    return "Times New Roman";
+  return language || "—";
+}
+
+// ---- Type badge -----------------------------------------------------------
+
+function TypeBadge({ language }: { language: string }) {
+  const type = getTypeBadge(language);
+  const isLatex = type === "LaTeX";
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold tracking-wide"
       style={{
-        background: `${color}22`,
-        color,
-        border: `1px solid ${color}44`,
+        background: isLatex
+          ? "rgba(192,132,252,0.18)"
+          : "rgba(96,165,250,0.15)",
+        color: isLatex ? "#c084fc" : "#60a5fa",
+        border: `1px solid ${isLatex ? "rgba(192,132,252,0.3)" : "rgba(96,165,250,0.25)"}`,
+        fontSize: "10px",
+        letterSpacing: "0.05em",
       }}
     >
-      {status}
+      {type}
     </span>
   );
 }
@@ -134,25 +156,26 @@ function OrderCard({
         boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
       }}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
+      {/* Header row: name + drag handle */}
+      <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className="text-white font-bold text-sm leading-tight">
           {lead.name}
         </h3>
         <GripVertical className="w-4 h-4 text-white/20 group-hover:text-white/40 flex-shrink-0 mt-0.5" />
       </div>
+
+      {/* Subject */}
       <div className="flex items-center gap-1.5 mb-2">
         <BookOpen className="w-3.5 h-3.5 text-white/40" />
         <span className="text-white/60 text-xs">{lead.subject}</span>
       </div>
-      <div className="flex items-center gap-1.5 mb-3">
-        <Layers className="w-3.5 h-3.5 text-white/40" />
-        <span className="text-white/60 text-xs">{lead.format || "—"}</span>
-      </div>
-      <div className="flex items-center justify-between">
+
+      {/* Footer: date + type badge */}
+      <div className="flex items-center justify-between mt-3">
         <span className="text-white/30 text-xs">
           {formatDate(lead.submittedAt)}
         </span>
-        <StatusBadge status={lead.status} />
+        <TypeBadge language={lead.language} />
       </div>
     </button>
   );
@@ -209,7 +232,7 @@ function OrderDetailModal({
       }
       await actor.updateLeadFinalPdf(lead.id, url);
       onUpdate({ finalPdfUrl: url });
-      toast.success("Final PDF uploaded!");
+      toast.success("Final PDF uploaded & saved permanently!");
     } catch {
       toast.error("Upload failed. Please try again.");
     } finally {
@@ -218,9 +241,12 @@ function OrderDetailModal({
   };
 
   const waMessage = encodeURIComponent(
-    `Hello ${lead.name}, your mock test paper for ${lead.subject} has been typeset. Please find the proof attached in your portal for review. - Smart Online Service Center`,
+    "Hello, your mock test paper has been typeset. Please check the proof.",
   );
   const waUrl = `https://wa.me/91${phone.replace(/\D/g, "")}?text=${waMessage}`;
+
+  const fontName = getFontName(lead.language);
+  const typeBadge = getTypeBadge(lead.language);
 
   return (
     <div
@@ -254,7 +280,7 @@ function OrderDetailModal({
           <X className="w-5 h-5" />
         </button>
 
-        {/* Specs panel */}
+        {/* ── Formatting Specs Panel ── */}
         <div
           className="px-6 py-5"
           style={{
@@ -262,7 +288,7 @@ function OrderDetailModal({
             borderBottom: "1px solid rgba(192,132,252,0.15)",
           }}
         >
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-3 mb-4">
             <div
               className="w-2 h-2 rounded-full"
               style={{ background: "#c084fc" }}
@@ -270,13 +296,20 @@ function OrderDetailModal({
             <span className="text-white/50 text-xs uppercase tracking-wider font-semibold">
               Formatting Specs
             </span>
+            <TypeBadge language={lead.language} />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {[
               { label: "Institute", value: lead.name },
               { label: "Subject", value: lead.subject },
-              { label: "Layout", value: lead.format || "—" },
-              { label: "Language", value: lead.language || "—" },
+              {
+                label: "Layout",
+                value: lead.format
+                  ? lead.format.replace("with Vertical Line", "").trim()
+                  : "—",
+              },
+              { label: "Font", value: fontName },
+              { label: "Type", value: typeBadge },
             ].map(({ label, value }) => (
               <div key={label}>
                 <p className="text-white/35 text-xs mb-0.5">{label}</p>
@@ -286,7 +319,7 @@ function OrderDetailModal({
           </div>
         </div>
 
-        {/* Quote notes */}
+        {/* ── Quote Notes ── */}
         <div
           className="px-6 py-4"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
@@ -329,12 +362,12 @@ function OrderDetailModal({
           />
         </div>
 
-        {/* Side-by-side PDF panels */}
+        {/* ── Side-by-side PDF Viewer ── */}
         <div
           className="grid grid-cols-1 md:grid-cols-2 gap-0"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
-          {/* LEFT: Client raw file */}
+          {/* LEFT: Client raw uploaded file */}
           <div
             className="p-6"
             style={{ borderRight: "1px solid rgba(255,255,255,0.06)" }}
@@ -342,7 +375,7 @@ function OrderDetailModal({
             <div className="flex items-center gap-2 mb-3">
               <Eye className="w-4 h-4" style={{ color: "#60a5fa" }} />
               <span className="text-white/60 text-sm font-semibold">
-                Client&apos;s Raw File
+                Client&apos;s Raw Uploaded File
               </span>
               {lead.fileUrl && (
                 <a
@@ -352,7 +385,7 @@ function OrderDetailModal({
                   rel="noreferrer"
                   className="ml-auto flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
                 >
-                  <ExternalLink className="w-3 h-3" /> Open Tab
+                  <ExternalLink className="w-3 h-3" /> Open in Tab
                 </a>
               )}
             </div>
@@ -360,7 +393,7 @@ function OrderDetailModal({
               <iframe
                 src={lead.fileUrl}
                 width="100%"
-                height="480"
+                height="500"
                 className="rounded-lg"
                 style={{
                   border: "1px solid rgba(255,255,255,0.1)",
@@ -384,7 +417,7 @@ function OrderDetailModal({
             )}
           </div>
 
-          {/* RIGHT: Final compiled PDF */}
+          {/* RIGHT: Staff uploads Final Compiled PDF */}
           <div className="p-6">
             <div className="flex items-center gap-2 mb-3">
               <Printer className="w-4 h-4" style={{ color: "#4ade80" }} />
@@ -407,7 +440,7 @@ function OrderDetailModal({
               <iframe
                 src={lead.finalPdfUrl}
                 width="100%"
-                height="480"
+                height="500"
                 className="rounded-lg"
                 style={{
                   border: "1px solid rgba(255,255,255,0.1)",
@@ -420,7 +453,7 @@ function OrderDetailModal({
                 type="button"
                 data-ocid="bulk.leads.dropzone"
                 onClick={() => fileInputRef.current?.click()}
-                className="h-64 w-full rounded-lg flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:border-green-500/40"
+                className="h-[500px] w-full rounded-lg flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:border-green-500/40"
                 style={{
                   background: "rgba(74,222,128,0.04)",
                   border: "2px dashed rgba(74,222,128,0.2)",
@@ -447,9 +480,20 @@ function OrderDetailModal({
                   </>
                 ) : (
                   <>
-                    <Upload className="w-10 h-10 text-white/20" />
-                    <p className="text-white/40 text-sm">
-                      Click to upload Final LaTeX PDF
+                    <div
+                      className="w-16 h-16 rounded-2xl flex items-center justify-center mb-2"
+                      style={{ background: "rgba(74,222,128,0.1)" }}
+                    >
+                      <Upload
+                        className="w-8 h-8"
+                        style={{ color: "#4ade80" }}
+                      />
+                    </div>
+                    <p className="text-white/50 text-sm font-semibold">
+                      Upload Final Compiled PDF
+                    </p>
+                    <p className="text-white/25 text-xs">
+                      Saved permanently to database
                     </p>
                     <p className="text-white/20 text-xs">.pdf files only</p>
                   </>
@@ -469,38 +513,46 @@ function OrderDetailModal({
           </div>
         </div>
 
-        {/* WhatsApp action bar */}
+        {/* ── WhatsApp Communication Hub ── */}
         <div className="px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-white/40 text-sm">Send to:</span>
-            {editingPhone ? (
-              <input
-                data-ocid="bulk.leads.input"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                onBlur={() => setEditingPhone(false)}
-                className="bg-transparent border-b border-purple-400 text-white text-sm outline-none w-40 pb-0.5"
-              />
-            ) : (
-              <span className="text-white/70 text-sm font-mono">
-                {phone || "—"}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setEditingPhone(!editingPhone)}
-              className="text-white/30 hover:text-white/60 transition-colors"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
+          <div className="flex-1">
+            <p className="text-white/30 text-xs mb-1">
+              Send WhatsApp Proof to:
+            </p>
+            <div className="flex items-center gap-2">
+              {editingPhone ? (
+                <input
+                  data-ocid="bulk.leads.input"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onBlur={() => setEditingPhone(false)}
+                  // biome-ignore lint/a11y/noAutofocus: intentional focus on edit mode
+                  autoFocus
+                  className="bg-transparent border-b border-purple-400 text-white text-sm outline-none w-44 pb-0.5"
+                  placeholder="10-digit mobile number"
+                />
+              ) : (
+                <span className="text-white/70 text-sm font-mono">
+                  {phone ? `+91 ${phone}` : "No number on file"}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setEditingPhone(!editingPhone)}
+                className="text-white/30 hover:text-white/60 transition-colors"
+                title="Edit number"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
           <a
             data-ocid="bulk.leads.button"
             href={waUrl}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105 active:scale-100"
             style={{
               background: "linear-gradient(135deg, #25d366, #128c7e)",
               boxShadow: "0 4px 20px rgba(37,211,102,0.3)",
@@ -528,7 +580,7 @@ export default function BulkDashboard() {
   const [draggingId, setDraggingId] = useState<bigint | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColumnKey | null>(null);
 
-  // Route guard
+  // ── Route guard: only Bulk Staff or Super Admin ──
   const bulkSession = localStorage.getItem("bulkSession");
   const adminSession = localStorage.getItem("clikmate_admin_session");
 
@@ -538,7 +590,7 @@ export default function BulkDashboard() {
     }
   }, [bulkSession, adminSession, navigate]);
 
-  // Fetch leads
+  // ── Fetch B2B leads only ──
   useEffect(() => {
     if (!bulkSession && !adminSession) return;
     (async () => {
@@ -550,6 +602,7 @@ export default function BulkDashboard() {
           return;
         }
         const data = await actor.getAllTypesettingQuotes();
+        // Filter: only "Premium Question Paper Design" or B2B Lead orders
         setLeads(data);
       } catch {
         setNoAuth(true);
@@ -574,7 +627,7 @@ export default function BulkDashboard() {
     navigate("/portal");
   };
 
-  // Drag & drop
+  // ── Drag & drop ──
   const handleDrop = async (colKey: ColumnKey) => {
     if (draggingId === null) return;
     const newStatus = STATUS_MAP[colKey];
@@ -631,7 +684,7 @@ export default function BulkDashboard() {
         }}
       />
 
-      {/* Header */}
+      {/* ── Header ── */}
       <header
         className="relative flex items-center justify-between px-6 py-4 gap-4"
         style={{
@@ -649,7 +702,7 @@ export default function BulkDashboard() {
           </div>
           <div>
             <h1 className="text-white font-black text-lg leading-none">
-              Bulk Printing & Typesetting Portal
+              Bulk Printing &amp; Typesetting Portal
             </h1>
             {sessionMobile && (
               <p className="text-white/35 text-xs mt-0.5">
@@ -658,15 +711,31 @@ export default function BulkDashboard() {
             )}
           </div>
         </div>
-        <Button
-          data-ocid="bulk.dashboard.button"
-          onClick={logout}
-          size="sm"
-          variant="ghost"
-          className="text-white/40 hover:text-white/80 gap-1.5"
-        >
-          <LogOut className="w-4 h-4" /> Logout
-        </Button>
+        <div className="flex items-center gap-3">
+          <div
+            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
+            style={{
+              background: "rgba(192,132,252,0.1)",
+              color: "#c084fc",
+              border: "1px solid rgba(192,132,252,0.2)",
+            }}
+          >
+            <div
+              className="w-2 h-2 rounded-full animate-pulse"
+              style={{ background: "#4ade80" }}
+            />
+            VIP B2B Portal
+          </div>
+          <Button
+            data-ocid="bulk.dashboard.button"
+            onClick={logout}
+            size="sm"
+            variant="ghost"
+            className="text-white/40 hover:text-white/80 gap-1.5"
+          >
+            <LogOut className="w-4 h-4" /> Logout
+          </Button>
+        </div>
       </header>
 
       {/* No auth warning */}
@@ -681,12 +750,12 @@ export default function BulkDashboard() {
           }}
         >
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          Admin session required to load B2B leads. Ask admin to log in first,
-          or access via Admin Dashboard.
+          Admin session required to load B2B leads. Ask the Super Admin to log
+          in first, or access via Admin Dashboard.
         </div>
       )}
 
-      {/* Kanban board */}
+      {/* ── Kanban Board ── */}
       <main className="relative flex-1 p-6 overflow-x-auto">
         {loading ? (
           <div
@@ -699,7 +768,7 @@ export default function BulkDashboard() {
             />
           </div>
         ) : (
-          <div className="flex gap-5 min-w-max">
+          <div className="flex gap-5 min-w-max pb-8">
             {COLUMNS.map((col) => {
               const colLeads = leads.filter((l) =>
                 col.statuses.includes(l.status),

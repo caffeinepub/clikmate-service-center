@@ -258,7 +258,10 @@ export default function PosPage() {
             staffMobile={staffData.mobile}
           />
         ) : (
-          <AccountsPanel actor={actor as unknown as backendInterface} />
+          <AccountsPanel
+            actor={actor as unknown as backendInterface}
+            onNewBill={() => setRightTab("billing")}
+          />
         )}
       </div>
     </div>
@@ -278,6 +281,8 @@ function CatalogPanel({
 }) {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"services" | "products">("services");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [rowQty, setRowQty] = useState<Record<string, number>>({});
   const [modalItem, setModalItem] = useState<CatalogItem | null>(null);
   const [modalType, setModalType] = useState<
     "product" | "service" | "pdf" | null
@@ -390,122 +395,413 @@ function CatalogPanel({
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Grid */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: 12,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-          gap: 8,
-          alignContent: "start",
-        }}
-      >
-        {loading && (
-          <div
-            data-ocid="pos.catalog.loading_state"
-            style={{
-              gridColumn: "1/-1",
-              textAlign: "center",
-              color: "rgba(255,255,255,0.3)",
-              padding: 40,
-            }}
-          >
-            Loading catalog...
-          </div>
-        )}
-        {!loading && displayed.length === 0 && (
-          <div
-            data-ocid="pos.catalog.empty_state"
-            style={{
-              gridColumn: "1/-1",
-              textAlign: "center",
-              color: "rgba(255,255,255,0.3)",
-              padding: 40,
-            }}
-          >
-            No items found
-          </div>
-        )}
-        {displayed.map((item) => (
-          <button
-            key={item.id.toString()}
-            type="button"
-            onClick={() => handleItemClick(item)}
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 10,
-              padding: "10px 8px",
-              cursor: "pointer",
-              textAlign: "center",
-              transition: "all 0.15s",
-              position: "relative",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(124,58,237,0.2)";
-              (e.currentTarget as HTMLButtonElement).style.borderColor =
-                "rgba(124,58,237,0.5)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(255,255,255,0.04)";
-              (e.currentTarget as HTMLButtonElement).style.borderColor =
-                "rgba(255,255,255,0.08)";
-            }}
-          >
-            {item.requiresPdfCalc && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: 4,
-                  right: 4,
-                  background: "#2563eb",
-                  borderRadius: 4,
-                  padding: "1px 4px",
-                  fontSize: 9,
-                  color: "white",
-                  fontWeight: 700,
-                }}
-              >
-                PDF
-              </span>
-            )}
-            <div
+        {/* View Mode Toggle */}
+        <div
+          style={{
+            display: "flex",
+            gap: 4,
+            background: "rgba(255,255,255,0.05)",
+            borderRadius: 6,
+            padding: 2,
+            marginTop: 8,
+          }}
+        >
+          {(["list", "grid"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              data-ocid={`pos.catalog.${v}_view.toggle`}
+              onClick={() => setViewMode(v)}
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                background: "rgba(124,58,237,0.3)",
+                flex: 1,
+                padding: "4px 8px",
+                borderRadius: 5,
+                border: "none",
+                background:
+                  viewMode === v ? "rgba(245,158,11,0.8)" : "transparent",
+                color: viewMode === v ? "#1a1a1a" : "rgba(255,255,255,0.4)",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: 11,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                margin: "0 auto 6px",
+                gap: 4,
               }}
             >
-              <FileText size={16} color="#a78bfa" />
-            </div>
-            <p
-              style={{
-                color: "white",
-                fontSize: 11,
-                fontWeight: 600,
-                lineHeight: 1.3,
-                marginBottom: 3,
-              }}
-            >
-              {item.name}
-            </p>
-            <p style={{ color: "#f59e0b", fontSize: 11, fontWeight: 700 }}>
-              {item.price || "₹0"}
-            </p>
-          </button>
-        ))}
+              {v === "list" ? "≡ List" : "⊞ Grid"}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Catalog View: Grid or List */}
+      {viewMode === "grid" ? (
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: 12,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+            gap: 8,
+            alignContent: "start",
+          }}
+        >
+          {loading && (
+            <div
+              data-ocid="pos.catalog.loading_state"
+              style={{
+                gridColumn: "1/-1",
+                textAlign: "center",
+                color: "rgba(255,255,255,0.3)",
+                padding: 40,
+              }}
+            >
+              Loading catalog...
+            </div>
+          )}
+          {!loading && displayed.length === 0 && (
+            <div
+              data-ocid="pos.catalog.empty_state"
+              style={{
+                gridColumn: "1/-1",
+                textAlign: "center",
+                color: "rgba(255,255,255,0.3)",
+                padding: 40,
+              }}
+            >
+              No items found
+            </div>
+          )}
+          {displayed.map((item) => (
+            <button
+              key={item.id.toString()}
+              type="button"
+              onClick={() => handleItemClick(item)}
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 10,
+                padding: "10px 8px",
+                cursor: "pointer",
+                textAlign: "center",
+                transition: "all 0.15s",
+                position: "relative",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(124,58,237,0.2)";
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  "rgba(124,58,237,0.5)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(255,255,255,0.04)";
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  "rgba(255,255,255,0.08)";
+              }}
+            >
+              {item.requiresPdfCalc && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 4,
+                    right: 4,
+                    background: "#2563eb",
+                    borderRadius: 4,
+                    padding: "1px 4px",
+                    fontSize: 9,
+                    color: "white",
+                    fontWeight: 700,
+                  }}
+                >
+                  PDF
+                </span>
+              )}
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: "rgba(124,58,237,0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 6px",
+                }}
+              >
+                <FileText size={16} color="#a78bfa" />
+              </div>
+              <p
+                style={{
+                  color: "white",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  lineHeight: 1.3,
+                  marginBottom: 3,
+                }}
+              >
+                {item.name}
+              </p>
+              <p style={{ color: "#f59e0b", fontSize: 11, fontWeight: 700 }}>
+                {item.price || "₹0"}
+              </p>
+            </button>
+          ))}
+        </div>
+      ) : (
+        /* ── List View (ERP-style compact table) ── */
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {loading && (
+            <div
+              data-ocid="pos.catalog.loading_state"
+              style={{
+                textAlign: "center",
+                color: "rgba(255,255,255,0.3)",
+                padding: 40,
+              }}
+            >
+              Loading catalog...
+            </div>
+          )}
+          {!loading && displayed.length === 0 && (
+            <div
+              data-ocid="pos.catalog.empty_state"
+              style={{
+                textAlign: "center",
+                color: "rgba(255,255,255,0.3)",
+                padding: 40,
+              }}
+            >
+              No items found
+            </div>
+          )}
+          {!loading && displayed.length > 0 && (
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 12,
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    borderBottom: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <th
+                    style={{
+                      padding: "6px 10px",
+                      textAlign: "left",
+                      color: "rgba(255,255,255,0.5)",
+                      fontWeight: 600,
+                      fontSize: 11,
+                    }}
+                  >
+                    Item
+                  </th>
+                  <th
+                    style={{
+                      padding: "6px 8px",
+                      textAlign: "left",
+                      color: "rgba(255,255,255,0.5)",
+                      fontWeight: 600,
+                      fontSize: 11,
+                    }}
+                  >
+                    Category
+                  </th>
+                  <th
+                    style={{
+                      padding: "6px 8px",
+                      textAlign: "right",
+                      color: "rgba(255,255,255,0.5)",
+                      fontWeight: 600,
+                      fontSize: 11,
+                    }}
+                  >
+                    Rate (₹)
+                  </th>
+                  <th
+                    style={{
+                      padding: "6px 8px",
+                      textAlign: "center",
+                      color: "rgba(255,255,255,0.5)",
+                      fontWeight: 600,
+                      fontSize: 11,
+                      width: 64,
+                    }}
+                  >
+                    Qty
+                  </th>
+                  <th
+                    style={{
+                      padding: "6px 8px",
+                      textAlign: "center",
+                      color: "rgba(255,255,255,0.5)",
+                      fontWeight: 600,
+                      fontSize: 11,
+                      width: 60,
+                    }}
+                  >
+                    Add
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayed.map((item, idx) => {
+                  const itemKey = item.id.toString();
+                  const qty = rowQty[itemKey] ?? 1;
+                  const rateNum =
+                    typeof item.price === "string"
+                      ? Number.parseFloat(item.price.replace(/[^0-9.]/g, "")) ||
+                        0
+                      : (item.price as number) || 0;
+                  return (
+                    <tr
+                      key={itemKey}
+                      style={{
+                        background:
+                          idx % 2 === 0
+                            ? "transparent"
+                            : "rgba(255,255,255,0.015)",
+                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        height: 36,
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: "4px 10px",
+                          color: "white",
+                          fontWeight: 600,
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          {item.name}
+                          {item.requiresPdfCalc && (
+                            <span
+                              style={{
+                                background: "#2563eb",
+                                borderRadius: 3,
+                                padding: "1px 5px",
+                                fontSize: 9,
+                                color: "white",
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            >
+                              PDF
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td
+                        style={{
+                          padding: "4px 8px",
+                          color: "rgba(255,255,255,0.4)",
+                          fontSize: 11,
+                        }}
+                      >
+                        {item.category}
+                      </td>
+                      <td
+                        style={{
+                          padding: "4px 8px",
+                          color: "#f59e0b",
+                          fontWeight: 700,
+                          textAlign: "right",
+                        }}
+                      >
+                        {rateNum > 0 ? `₹${rateNum}` : "₹0"}
+                      </td>
+                      <td style={{ padding: "4px 8px", textAlign: "center" }}>
+                        {item.requiresPdfCalc ? (
+                          <span
+                            style={{
+                              color: "rgba(255,255,255,0.2)",
+                              fontSize: 10,
+                            }}
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <input
+                            type="number"
+                            min={1}
+                            value={qty}
+                            onChange={(e) => {
+                              const v = Math.max(
+                                1,
+                                Number.parseInt(e.target.value) || 1,
+                              );
+                              setRowQty((prev) => ({ ...prev, [itemKey]: v }));
+                            }}
+                            style={{
+                              width: 52,
+                              padding: "2px 6px",
+                              borderRadius: 5,
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: "rgba(255,255,255,0.07)",
+                              color: "white",
+                              fontSize: 12,
+                              textAlign: "center",
+                              outline: "none",
+                            }}
+                          />
+                        )}
+                      </td>
+                      <td style={{ padding: "4px 8px", textAlign: "center" }}>
+                        <button
+                          type="button"
+                          data-ocid={`pos.catalog.list.add_button.${idx + 1}`}
+                          onClick={() => {
+                            if (item.requiresPdfCalc) {
+                              handleItemClick(item);
+                            } else {
+                              const q = rowQty[itemKey] ?? 1;
+                              dispatchAddToCart({
+                                id: item.id.toString(),
+                                name: item.name,
+                                qty: q,
+                                total: rateNum * q,
+                                unitPrice: rateNum,
+                              });
+                              setRowQty((prev) => ({ ...prev, [itemKey]: 1 }));
+                            }
+                          }}
+                          style={{
+                            padding: "3px 10px",
+                            borderRadius: 5,
+                            border: "none",
+                            background: item.requiresPdfCalc
+                              ? "#2563eb"
+                              : "#f59e0b",
+                            color: item.requiresPdfCalc ? "white" : "#1a1a1a",
+                            fontWeight: 700,
+                            fontSize: 11,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {item.requiresPdfCalc ? "PDF" : "Add"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Modals */}
       {modalItem && modalType === "product" && (
@@ -1645,7 +1941,10 @@ function ReceiptModal({
 }
 
 // ─── Accounts Panel ───────────────────────────────────────────────────────────
-function AccountsPanel({ actor }: { actor: backendInterface | null }) {
+function AccountsPanel({
+  actor,
+  onNewBill,
+}: { actor: backendInterface | null; onNewBill?: () => void }) {
   const [sales, setSales] = useState<
     Array<{
       id: bigint;
@@ -1776,6 +2075,31 @@ function AccountsPanel({ actor }: { actor: backendInterface | null }) {
         gap: 16,
       }}
     >
+      {/* New Bill shortcut */}
+      {onNewBill && (
+        <button
+          type="button"
+          data-ocid="pos.accounts.new_bill_btn"
+          onClick={onNewBill}
+          style={{
+            width: "100%",
+            padding: "12px 16px",
+            borderRadius: 10,
+            border: "2px solid #f59e0b",
+            background: "linear-gradient(135deg, #f59e0b, #d97706)",
+            color: "#1a1a1a",
+            fontWeight: 800,
+            fontSize: 14,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+          }}
+        >
+          + Create New Bill / Order
+        </button>
+      )}
       {/* Daily Tally */}
       <div
         style={{

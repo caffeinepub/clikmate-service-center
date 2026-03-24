@@ -127,11 +127,14 @@ export interface ShopOrder {
     phone: string;
     items: Array<ShopOrderItem>;
 }
-export interface KhataEntry {
-    customerName: string;
-    lastUpdated: bigint;
-    totalDue: number;
-    phone: string;
+export interface ManualIncomeEntry {
+    id: bigint;
+    date: string;
+    createdAt: bigint;
+    description: string;
+    paymentMode: string;
+    category: string;
+    amount: number;
 }
 export interface OrderRecord {
     id: bigint;
@@ -146,6 +149,12 @@ export interface OrderRecord {
 }
 export interface _CaffeineStorageRefillInformation {
     proposed_top_up_amount?: bigint;
+}
+export interface KhataEntry {
+    customerName: string;
+    lastUpdated: bigint;
+    totalDue: number;
+    phone: string;
 }
 export interface TypesettingQuoteUpdate {
     status: string;
@@ -220,6 +229,20 @@ export interface TypesettingQuoteRequest {
     format: string;
     fileUrl: string;
 }
+export interface CatalogItem {
+    id: bigint;
+    requiredDocuments: string;
+    stockStatus: string;
+    requiresPdfCalc: boolean;
+    published: boolean;
+    name: string;
+    createdAt: bigint;
+    description: string;
+    category: string;
+    price: string;
+    mediaFiles: Array<ExternalBlob>;
+    mediaTypes: Array<string>;
+}
 export interface BusinessInfo {
     hours: string;
     name: string;
@@ -238,19 +261,15 @@ export interface Inquiry {
     message: string;
     phone: string;
 }
-export interface CatalogItem {
+export interface ExpenseEntry {
     id: bigint;
-    requiredDocuments: string;
-    stockStatus: string;
-    requiresPdfCalc: boolean;
-    published: boolean;
-    name: string;
+    date: string;
+    note: string;
     createdAt: bigint;
-    description: string;
+    addedBy: string;
+    paymentMode: string;
     category: string;
-    price: string;
-    mediaFiles: Array<ExternalBlob>;
-    mediaTypes: Array<string>;
+    amount: number;
 }
 export interface _CaffeineStorageRefillResult {
     success?: boolean;
@@ -283,7 +302,9 @@ export interface backendInterface {
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
     addCatalogItem(input: CatalogItemInput): Promise<bigint>;
+    addExpense(category: string, amount: number, date: string, paymentMode: string, note: string, addedBy: string): Promise<bigint>;
     addKhataDue(phone: string, customerName: string, amount: number): Promise<number>;
+    addManualIncome(category: string, amount: number, date: string, paymentMode: string, description: string): Promise<bigint>;
     addRider(name: string, mobile: string, pin: string): Promise<void>;
     addTeamMember(name: string, mobile: string, pin: string, role: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
@@ -292,6 +313,8 @@ export interface backendInterface {
     deductWallet(phone: string, amount: number): Promise<number>;
     deductWalletForOrder(phone: string, amount: number): Promise<number>;
     deleteCatalogItem(id: bigint): Promise<void>;
+    deleteExpense(id: bigint): Promise<void>;
+    deleteManualIncome(id: bigint): Promise<void>;
     deleteReview(id: bigint): Promise<void>;
     exportBulkLeadsToCsv(): Promise<string>;
     filterOrders(filters: FilterOrders): Promise<Array<OrderRecord>>;
@@ -308,8 +331,10 @@ export interface backendInterface {
         customerName: string;
         deliveryAddress: string;
     } | null>;
+    getExpenses(): Promise<Array<ExpenseEntry>>;
     getInquiries(): Promise<Array<Inquiry>>;
     getKhataEntry(phone: string): Promise<KhataEntry | null>;
+    getManualIncomes(): Promise<Array<ManualIncomeEntry>>;
     getOrdersByPhone(phone: string): Promise<Array<OrderRecord>>;
     getPosSales(): Promise<Array<PosSale>>;
     getPosSalesByPhone(phone: string): Promise<Array<PosSale>>;
@@ -328,6 +353,7 @@ export interface backendInterface {
     rechargeWallet(phone: string, amount: number): Promise<number>;
     recordPosSale(items: Array<PosSaleItem>, totalAmount: number, paymentMethod: string, customerPhone: string, staffMobile: string): Promise<bigint>;
     removeRider(mobile: string): Promise<void>;
+    resetStaffPin(mobile: string, newPin: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     saveCustomerProfile(phone: string, customerName: string, deliveryAddress: string): Promise<void>;
     seedReviews(): Promise<void>;
@@ -341,8 +367,10 @@ export interface backendInterface {
     togglePublishCatalogItem(id: bigint): Promise<void>;
     toggleReviewPublished(id: bigint): Promise<void>;
     updateCatalogItem(id: bigint, input: CatalogItemInput): Promise<void>;
+    updateExpense(id: bigint, category: string, amount: number, date: string, paymentMode: string, note: string): Promise<void>;
     updateLeadFinalPdf(id: bigint, finalPdfUrl: string): Promise<void>;
     updateLeadQuoteNotes(id: bigint, notes: string): Promise<void>;
+    updateManualIncome(id: bigint, category: string, amount: number, date: string, paymentMode: string, description: string): Promise<void>;
     updateOrderStatus(id: bigint, status: string): Promise<void>;
     updateTypesettingQuoteStatus(id: bigint, update: TypesettingQuoteUpdate): Promise<void>;
     uploadCscFinalOutput(orderId: bigint, file: ExternalBlob): Promise<void>;
@@ -466,6 +494,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async addExpense(arg0: string, arg1: number, arg2: string, arg3: string, arg4: string, arg5: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.addExpense(arg0, arg1, arg2, arg3, arg4, arg5);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.addExpense(arg0, arg1, arg2, arg3, arg4, arg5);
+            return result;
+        }
+    }
     async addKhataDue(arg0: string, arg1: string, arg2: number): Promise<number> {
         if (this.processError) {
             try {
@@ -477,6 +519,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.addKhataDue(arg0, arg1, arg2);
+            return result;
+        }
+    }
+    async addManualIncome(arg0: string, arg1: number, arg2: string, arg3: string, arg4: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.addManualIncome(arg0, arg1, arg2, arg3, arg4);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.addManualIncome(arg0, arg1, arg2, arg3, arg4);
             return result;
         }
     }
@@ -589,6 +645,34 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.deleteCatalogItem(arg0);
+            return result;
+        }
+    }
+    async deleteExpense(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteExpense(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteExpense(arg0);
+            return result;
+        }
+    }
+    async deleteManualIncome(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteManualIncome(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteManualIncome(arg0);
             return result;
         }
     }
@@ -777,6 +861,20 @@ export class Backend implements backendInterface {
             return from_candid_opt_n34(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getExpenses(): Promise<Array<ExpenseEntry>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getExpenses();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getExpenses();
+            return result;
+        }
+    }
     async getInquiries(): Promise<Array<Inquiry>> {
         if (this.processError) {
             try {
@@ -803,6 +901,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getKhataEntry(arg0);
             return from_candid_opt_n35(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getManualIncomes(): Promise<Array<ManualIncomeEntry>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getManualIncomes();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getManualIncomes();
+            return result;
         }
     }
     async getOrdersByPhone(arg0: string): Promise<Array<OrderRecord>> {
@@ -1057,6 +1169,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async resetStaffPin(arg0: string, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.resetStaffPin(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.resetStaffPin(arg0, arg1);
+            return result;
+        }
+    }
     async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
         if (this.processError) {
             try {
@@ -1239,6 +1365,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async updateExpense(arg0: bigint, arg1: string, arg2: number, arg3: string, arg4: string, arg5: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateExpense(arg0, arg1, arg2, arg3, arg4, arg5);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateExpense(arg0, arg1, arg2, arg3, arg4, arg5);
+            return result;
+        }
+    }
     async updateLeadFinalPdf(arg0: bigint, arg1: string): Promise<void> {
         if (this.processError) {
             try {
@@ -1264,6 +1404,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.updateLeadQuoteNotes(arg0, arg1);
+            return result;
+        }
+    }
+    async updateManualIncome(arg0: bigint, arg1: string, arg2: number, arg3: string, arg4: string, arg5: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateManualIncome(arg0, arg1, arg2, arg3, arg4, arg5);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateManualIncome(arg0, arg1, arg2, arg3, arg4, arg5);
             return result;
         }
     }

@@ -72,6 +72,7 @@ import PosLoginPage from "./pages/PosLoginPage";
 import PosPage from "./pages/PosPage";
 import RiderDashboard from "./pages/RiderDashboard";
 import TeamPortalPage from "./pages/TeamPortalPage";
+import VaultPage from "./pages/VaultPage";
 
 function smoothScroll(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -302,15 +303,25 @@ function Header({
               )}
             </button>
             {auth.loggedInPhone ? (
-              <button
-                type="button"
-                data-ocid="nav.my_account.button"
-                onClick={auth.onOpenDashboard}
-                className="flex items-center gap-2 yellow-bg text-gray-900 font-semibold text-xs px-3 py-2 rounded-full hover:opacity-90 transition-opacity"
-              >
-                <User className="w-3.5 h-3.5" />
-                My Account
-              </button>
+              <>
+                <Link
+                  to="/vault"
+                  data-ocid="nav.vault.link"
+                  className="flex items-center gap-2 text-blue-700 font-semibold text-xs px-3 py-2 rounded-full hover:bg-blue-50 transition-colors border border-blue-200"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  My Vault
+                </Link>
+                <button
+                  type="button"
+                  data-ocid="nav.my_account.button"
+                  onClick={auth.onOpenDashboard}
+                  className="flex items-center gap-2 yellow-bg text-gray-900 font-semibold text-xs px-3 py-2 rounded-full hover:opacity-90 transition-opacity"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  My Account
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -1441,6 +1452,7 @@ export default function App() {
           <Route path="/portal" element={<TeamPortalPage />} />
           <Route path="/bulk-dashboard" element={<BulkDashboard />} />
           <Route path="/bulk-login" element={<BulkLoginPage />} />
+          <Route path="/vault" element={<VaultPage />} />
           <Route
             path="/order-success/:orderId"
             element={<OrderSuccessPage />}

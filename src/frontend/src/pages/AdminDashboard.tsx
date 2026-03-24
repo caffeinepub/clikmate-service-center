@@ -2,7 +2,9 @@ import { ExternalBlob } from "@/backend";
 import type {
   CatalogItem,
   CatalogItemInput,
+  ExpenseEntry,
   FilterOrders,
+  ManualIncomeEntry,
   OrderRecord,
   Review,
   ShopOrder,
@@ -20,11 +22,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useActor } from "@/hooks/useActor";
 import { Link } from "@/utils/router";
 import {
   AlertTriangle,
+  BarChart3,
   Bell,
   Building2,
   ClipboardList,
@@ -34,6 +38,7 @@ import {
   FilmIcon,
   FolderOpen,
   GripVertical,
+  KeyRound,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -52,7 +57,7 @@ import {
   Zap,
 } from "lucide-react";
 import React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -102,7 +107,8 @@ type NavSection =
   | "team"
   | "wallet"
   | "reviews"
-  | "b2b-leads";
+  | "b2b-leads"
+  | "audit";
 
 interface MediaFile {
   id: string;
@@ -2354,6 +2360,7 @@ function OrderStatusBadge({ status }: { status: string }) {
     Printing: { bg: "rgba(59,130,246,0.15)", color: "#60a5fa" },
     "Ready for Pickup": { bg: "rgba(16,185,129,0.15)", color: "#34d399" },
     "Ready for Delivery": { bg: "rgba(99,102,241,0.15)", color: "#818cf8" },
+    "Out for Delivery": { bg: "rgba(245,158,11,0.15)", color: "#f59e0b" },
     Completed: { bg: "rgba(16,185,129,0.15)", color: "#34d399" },
     Delivered: { bg: "rgba(100,116,139,0.15)", color: "#94a3b8" },
     Cancelled: { bg: "rgba(239,68,68,0.15)", color: "#f87171" },
@@ -2932,6 +2939,7 @@ const SHOP_ORDER_STATUSES = [
   "Processing/Printing",
   "Ready for Pickup",
   "Ready for Delivery",
+  "Out for Delivery",
   "Completed",
   "Cancelled",
 ];
@@ -2959,6 +2967,7 @@ function ShopOrderStatusBadge({ status }: { status: string }) {
     Printing: { bg: "rgba(59,130,246,0.2)", color: "#60a5fa" },
     "Ready for Pickup": { bg: "rgba(16,185,129,0.2)", color: "#34d399" },
     "Ready for Delivery": { bg: "rgba(99,102,241,0.2)", color: "#818cf8" },
+    "Out for Delivery": { bg: "rgba(245,158,11,0.15)", color: "#f59e0b" },
     Completed: { bg: "rgba(16,185,129,0.2)", color: "#34d399" },
     Delivered: { bg: "rgba(139,92,246,0.2)", color: "#a78bfa" },
     Cancelled: { bg: "rgba(239,68,68,0.2)", color: "#f87171" },
@@ -5054,6 +5063,22 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
   const [role, setRole] = useState("Shop Staff");
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [revealedPins, setRevealedPins] = useState<Set<string>>(new Set());
+  const [resetPinTarget, setResetPinTarget] = useState<{
+    mobile: string;
+    name: string;
+  } | null>(null);
+  const [newPin, setNewPin] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
+
+  function togglePin(mobile: string) {
+    setRevealedPins((prev) => {
+      const next = new Set(prev);
+      if (next.has(mobile)) next.delete(mobile);
+      else next.add(mobile);
+      return next;
+    });
+  }
 
   async function loadMembers() {
     if (!actor) return;
@@ -5111,6 +5136,33 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
       toast.error("Failed to remove team member.");
     } finally {
       setRemoving(null);
+    }
+  }
+
+  async function handleResetPin() {
+    if (!actor || !resetPinTarget) return;
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      toast.error("PIN must be exactly 4 digits.");
+      return;
+    }
+    setSavingPin(true);
+    try {
+      await (actor as unknown as backendInterface).resetStaffPin(
+        resetPinTarget.mobile,
+        newPin,
+      );
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.mobile === resetPinTarget.mobile ? { ...m, pin: newPin } : m,
+        ),
+      );
+      toast.success("PIN updated successfully.");
+      setResetPinTarget(null);
+      setNewPin("");
+    } catch {
+      toast.error("Failed to update PIN.");
+    } finally {
+      setSavingPin(false);
     }
   }
 
@@ -5339,7 +5391,14 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
           >
             <thead>
               <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                {["Name", "Mobile", "Role", "PIN", "Action"].map((h) => (
+                {[
+                  "Name",
+                  "Login ID (Mobile)",
+                  "Role",
+                  "Access PIN",
+                  "Status",
+                  "Action",
+                ].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -5385,30 +5444,89 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
                   <td style={{ padding: "12px 20px" }}>
                     <RoleBadge role={member.role} />
                   </td>
-                  <td
-                    style={{
-                      padding: "12px 20px",
-                      color: "#64748b",
-                      fontSize: 14,
-                    }}
-                  >
-                    ****
+                  <td style={{ padding: "12px 20px" }}>
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <span
+                        style={{
+                          color: "#94a3b8",
+                          fontSize: 14,
+                          fontFamily: "monospace",
+                          letterSpacing: "0.1em",
+                        }}
+                      >
+                        {revealedPins.has(member.mobile) ? member.pin : "••••"}
+                      </span>
+                      <button
+                        data-ocid={`admin.team.toggle.${members.indexOf(member) + 1}`}
+                        type="button"
+                        onClick={() => togglePin(member.mobile)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "#64748b",
+                          padding: "2px",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                        title={
+                          revealedPins.has(member.mobile)
+                            ? "Hide PIN"
+                            : "Reveal PIN"
+                        }
+                      >
+                        {revealedPins.has(member.mobile) ? (
+                          <EyeOff style={{ width: 14, height: 14 }} />
+                        ) : (
+                          <Eye style={{ width: 14, height: 14 }} />
+                        )}
+                      </button>
+                    </div>
                   </td>
                   <td style={{ padding: "12px 20px" }}>
-                    <Button
-                      data-ocid={`admin.team.delete_button.${idx + 1}`}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveMember(member.mobile)}
-                      disabled={removing === member.mobile}
-                      style={{ color: "#f87171", fontSize: 12 }}
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
                     >
-                      {removing === member.mobile ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        "Remove"
-                      )}
-                    </Button>
+                      <Button
+                        data-ocid={`admin.team.reset_pin_button.${idx + 1}`}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setResetPinTarget({
+                            mobile: member.mobile,
+                            name: member.name,
+                          });
+                          setNewPin("");
+                        }}
+                        style={{
+                          color: "#f59e0b",
+                          fontSize: 12,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                        title="Reset PIN"
+                      >
+                        <KeyRound style={{ width: 13, height: 13 }} />
+                        Reset PIN
+                      </Button>
+                      <Button
+                        data-ocid={`admin.team.delete_button.${idx + 1}`}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveMember(member.mobile)}
+                        disabled={removing === member.mobile}
+                        style={{ color: "#f87171", fontSize: 12 }}
+                      >
+                        {removing === member.mobile ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          "Remove"
+                        )}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -5416,6 +5534,189 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
           </table>
         )}
       </div>
+
+      {/* Reset PIN Modal */}
+      {resetPinTarget && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => setResetPinTarget(null)}
+          onKeyDown={(e) => e.key === "Escape" && setResetPinTarget(null)}
+          role="presentation"
+        >
+          <div
+            style={{
+              background: "#1e293b",
+              borderRadius: 14,
+              padding: 28,
+              width: 360,
+              border: "1px solid rgba(255,255,255,0.1)",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            aria-label="Reset PIN dialog"
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <h3
+                style={{
+                  color: "#f1f5f9",
+                  fontSize: 17,
+                  fontWeight: 700,
+                  margin: 0,
+                }}
+              >
+                Reset PIN
+              </h3>
+              <button
+                type="button"
+                onClick={() => setResetPinTarget(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#64748b",
+                  padding: 4,
+                  display: "flex",
+                }}
+              >
+                <X style={{ width: 18, height: 18 }} />
+              </button>
+            </div>
+            <p style={{ color: "#94a3b8", fontSize: 13, marginBottom: 20 }}>
+              Setting new PIN for{" "}
+              <strong style={{ color: "#f1f5f9" }}>
+                {resetPinTarget.name}
+              </strong>
+            </p>
+
+            <label
+              htmlFor="reset-pin-input"
+              style={{
+                display: "block",
+                color: "#94a3b8",
+                fontSize: 13,
+                fontWeight: 500,
+                marginBottom: 8,
+              }}
+            >
+              New 4-Digit PIN
+            </label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              <input
+                data-ocid="admin.team.input"
+                id="reset-pin-input"
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={newPin}
+                onChange={(e) =>
+                  setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                }
+                placeholder="••••"
+                style={{
+                  flex: 1,
+                  background: "#0f172a",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  color: "#f1f5f9",
+                  fontSize: 20,
+                  letterSpacing: "0.3em",
+                  fontFamily: "monospace",
+                  outline: "none",
+                }}
+              />
+              <button
+                data-ocid="admin.team.secondary_button"
+                type="button"
+                onClick={() =>
+                  setNewPin(String(Math.floor(1000 + Math.random() * 9000)))
+                }
+                style={{
+                  background: "rgba(245,158,11,0.15)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  color: "#f59e0b",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Generate Random
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                data-ocid="admin.team.cancel_button"
+                type="button"
+                onClick={() => setResetPinTarget(null)}
+                style={{
+                  flex: 1,
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: 8,
+                  padding: "10px 0",
+                  color: "#94a3b8",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                data-ocid="admin.team.save_button"
+                type="button"
+                onClick={handleResetPin}
+                disabled={savingPin || newPin.length !== 4}
+                style={{
+                  flex: 2,
+                  background:
+                    newPin.length === 4
+                      ? "linear-gradient(135deg, #f59e0b, #d97706)"
+                      : "rgba(245,158,11,0.3)",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "10px 0",
+                  color: newPin.length === 4 ? "#fff" : "#94a3b8",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: newPin.length === 4 ? "pointer" : "not-allowed",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                {savingPin ? (
+                  <Loader2
+                    style={{ width: 16, height: 16 }}
+                    className="animate-spin"
+                  />
+                ) : null}
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -6247,6 +6548,1812 @@ function B2BLeadsSection({ actor }: { actor: backendInterface | null }) {
   );
 }
 
+// ─── Audit & Reports Section ───────────────────────────────────────────────────
+function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
+  const { actor } = useActor();
+  const [incomes, setIncomes] = useState<ManualIncomeEntry[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
+  const [posSales, setPosSales] = useState<
+    Array<{
+      id: bigint;
+      totalAmount: number;
+      paymentMethod: string;
+      createdAt: bigint;
+    }>
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [editIncomeEntry, setEditIncomeEntry] =
+    useState<ManualIncomeEntry | null>(null);
+  const [editExpenseEntry, setEditExpenseEntry] = useState<ExpenseEntry | null>(
+    null,
+  );
+  const [deleteConfirmId, setDeleteConfirmId] = useState<{
+    type: "income" | "expense";
+    id: bigint;
+  } | null>(null);
+  const [ledgerTab, setLedgerTab] = useState<"income" | "expense">("income");
+  const [showAudit, setShowAudit] = useState(false);
+  const [auditTimeframe, setAuditTimeframe] = useState<
+    "today" | "yesterday" | "month" | "fy" | "custom"
+  >("today");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [filterMinAmount, setFilterMinAmount] = useState("");
+  const [filterMaxAmount, setFilterMaxAmount] = useState("");
+  const [filterPaymentMode, setFilterPaymentMode] = useState("All");
+  const [filterTxType, setFilterTxType] = useState("All");
+  const todayStr = new Date().toISOString().split("T")[0];
+  const [incomeForm, setIncomeForm] = useState({
+    date: todayStr,
+    category: "Counter Sales (POS)",
+    amount: "",
+    paymentMode: "Cash",
+    description: "",
+  });
+  const [expenseForm, setExpenseForm] = useState({
+    date: todayStr,
+    category: "Printer Ink/Paper",
+    amount: "",
+    paymentMode: "Cash",
+    note: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const INCOME_CATEGORIES = [
+    "Counter Sales (POS)",
+    "Online App Orders",
+    "Advance / Khata Recovery",
+    "B2B Coaching Payment",
+    "Misc / Other Income",
+  ];
+  const EXPENSE_CATEGORIES = [
+    "Printer Ink/Paper",
+    "Shop Rent",
+    "Electricity/Internet",
+    "Salary/Rider Payout",
+    "Tea/Snacks",
+    "Misc",
+  ];
+  const PAYMENT_MODES = ["Cash", "UPI", "Bank Transfer"];
+
+  const loadData = useCallback(async () => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const [inc, exp, sales] = await Promise.all([
+        (actor as unknown as backendInterface).getManualIncomes(),
+        (actor as unknown as backendInterface).getExpenses(),
+        (actor as unknown as backendInterface).getPosSales(),
+      ]);
+      setIncomes(inc);
+      setExpenses(exp);
+      setPosSales(sales);
+    } catch {
+      toast.error("Failed to load audit data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [actor]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  async function handleAddIncome() {
+    if (!actor || !incomeForm.amount) return;
+    setSaving(true);
+    try {
+      if (editIncomeEntry) {
+        await (actor as unknown as backendInterface).updateManualIncome(
+          editIncomeEntry.id,
+          incomeForm.category,
+          Number(incomeForm.amount),
+          incomeForm.date,
+          incomeForm.paymentMode,
+          incomeForm.description,
+        );
+        toast.success("Income updated!");
+      } else {
+        await (actor as unknown as backendInterface).addManualIncome(
+          incomeForm.category,
+          Number(incomeForm.amount),
+          incomeForm.date,
+          incomeForm.paymentMode,
+          incomeForm.description,
+        );
+        toast.success("Income added!");
+      }
+      setShowIncomeModal(false);
+      setEditIncomeEntry(null);
+      setIncomeForm({
+        date: todayStr,
+        category: "Counter Sales (POS)",
+        amount: "",
+        paymentMode: "Cash",
+        description: "",
+      });
+      loadData();
+    } catch {
+      toast.error("Failed to save income.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAddExpense() {
+    if (!actor || !expenseForm.amount) return;
+    setSaving(true);
+    try {
+      if (editExpenseEntry) {
+        await (actor as unknown as backendInterface).updateExpense(
+          editExpenseEntry.id,
+          expenseForm.category,
+          Number(expenseForm.amount),
+          expenseForm.date,
+          expenseForm.paymentMode,
+          expenseForm.note,
+        );
+        toast.success("Expense updated!");
+      } else {
+        await (actor as unknown as backendInterface).addExpense(
+          expenseForm.category,
+          Number(expenseForm.amount),
+          expenseForm.date,
+          expenseForm.paymentMode,
+          expenseForm.note,
+          "admin",
+        );
+        toast.success("Expense added!");
+      }
+      setShowExpenseModal(false);
+      setEditExpenseEntry(null);
+      setExpenseForm({
+        date: todayStr,
+        category: "Printer Ink/Paper",
+        amount: "",
+        paymentMode: "Cash",
+        note: "",
+      });
+      loadData();
+    } catch {
+      toast.error("Failed to save expense.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!actor || !deleteConfirmId) return;
+    try {
+      if (deleteConfirmId.type === "income") {
+        await (actor as unknown as backendInterface).deleteManualIncome(
+          deleteConfirmId.id,
+        );
+        toast.success("Income deleted.");
+      } else {
+        await (actor as unknown as backendInterface).deleteExpense(
+          deleteConfirmId.id,
+        );
+        toast.success("Expense deleted.");
+      }
+      setDeleteConfirmId(null);
+      loadData();
+    } catch {
+      toast.error("Failed to delete.");
+    }
+  }
+
+  function getDateRange(): { start: Date; end: Date } {
+    const now = new Date();
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const todayEnd = new Date(todayStart.getTime() + 86400000 - 1);
+    if (auditTimeframe === "today") return { start: todayStart, end: todayEnd };
+    if (auditTimeframe === "yesterday") {
+      const y = new Date(todayStart);
+      y.setDate(y.getDate() - 1);
+      return { start: y, end: new Date(y.getTime() + 86400000 - 1) };
+    }
+    if (auditTimeframe === "month") {
+      return {
+        start: new Date(now.getFullYear(), now.getMonth(), 1),
+        end: todayEnd,
+      };
+    }
+    if (auditTimeframe === "fy") {
+      const fyStart =
+        now.getMonth() >= 3
+          ? new Date(now.getFullYear(), 3, 1)
+          : new Date(now.getFullYear() - 1, 3, 1);
+      return { start: fyStart, end: todayEnd };
+    }
+    if (auditTimeframe === "custom" && customFrom && customTo) {
+      return {
+        start: new Date(customFrom),
+        end: new Date(`${customTo}T23:59:59`),
+      };
+    }
+    return { start: todayStart, end: todayEnd };
+  }
+
+  const { start: rangeStart, end: rangeEnd } = getDateRange();
+
+  const allTransactions: Array<{
+    date: Date;
+    type: "Income" | "Expense";
+    category: string;
+    amount: number;
+    paymentMode: string;
+    description: string;
+  }> = [
+    ...incomes.map((i) => ({
+      date: new Date(i.date),
+      type: "Income" as const,
+      category: i.category,
+      amount: i.amount,
+      paymentMode: i.paymentMode,
+      description: i.description,
+    })),
+    ...posSales.map((s) => ({
+      date: new Date(Number(s.createdAt) / 1_000_000),
+      type: "Income" as const,
+      category: "Counter Sales (POS)",
+      amount: s.totalAmount,
+      paymentMode: s.paymentMethod,
+      description: "POS Sale",
+    })),
+    ...expenses.map((e) => ({
+      date: new Date(e.date),
+      type: "Expense" as const,
+      category: e.category,
+      amount: e.amount,
+      paymentMode: e.paymentMode,
+      description: e.note,
+    })),
+  ];
+
+  const filteredTx = allTransactions
+    .filter((tx) => {
+      if (tx.date < rangeStart || tx.date > rangeEnd) return false;
+      const min = filterMinAmount ? Number(filterMinAmount) : null;
+      const max = filterMaxAmount ? Number(filterMaxAmount) : null;
+      if (min !== null && tx.amount < min) return false;
+      if (max !== null && tx.amount > max) return false;
+      if (filterPaymentMode !== "All" && tx.paymentMode !== filterPaymentMode)
+        return false;
+      if (filterTxType === "Income Only" && tx.type !== "Income") return false;
+      if (filterTxType === "Expenses Only" && tx.type !== "Expense")
+        return false;
+      return true;
+    })
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const filteredIncome = filteredTx
+    .filter((t) => t.type === "Income")
+    .reduce((s, t) => s + t.amount, 0);
+  const filteredExpense = filteredTx
+    .filter((t) => t.type === "Expense")
+    .reduce((s, t) => s + t.amount, 0);
+  const filteredNet = filteredIncome - filteredExpense;
+
+  function formatRupees(n: number) {
+    return `₹${n.toFixed(2).replace(/(\d)(?=(\d{3})+\.)/g, "$1,")}`;
+  }
+
+  function exportCSV() {
+    const rows = [
+      ["Date", "Type", "Category", "Amount", "Payment Mode", "Description"],
+    ];
+    for (const tx of filteredTx) {
+      rows.push([
+        tx.date.toLocaleDateString("en-IN"),
+        tx.type,
+        tx.category,
+        tx.amount.toFixed(2),
+        tx.paymentMode,
+        tx.description,
+      ]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-report-${auditTimeframe}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    const lines2: string[] = [
+      "Smart Online Service Center - Audit Report",
+      `Period: ${rangeStart.toLocaleDateString("en-IN")} to ${rangeEnd.toLocaleDateString("en-IN")}`,
+      "",
+      `Total Income: ${formatRupees(filteredIncome)}`,
+      `Total Expenses: ${formatRupees(filteredExpense)}`,
+      `Net Profit: ${formatRupees(filteredNet)}`,
+      "",
+      "Date | Type | Category | Amount | Payment Mode | Description",
+      "---",
+      ...filteredTx.map(
+        (tx) =>
+          `${tx.date.toLocaleDateString("en-IN")} | ${tx.type} | ${tx.category} | ${formatRupees(tx.amount)} | ${tx.paymentMode} | ${tx.description}`,
+      ),
+    ];
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(
+      `<html><head><title>Audit Report</title><style>body{font-family:monospace;padding:24px}pre{white-space:pre-wrap;font-size:13px}</style></head><body><h2>Audit Report</h2><pre>${lines2.join("\n")}</pre><br><button onclick="window.print()">Print / Save as PDF</button></body></html>`,
+    );
+    win.document.close();
+  }
+
+  const cardBox: React.CSSProperties = {
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 12,
+    padding: 16,
+  };
+  const inp: React.CSSProperties = {
+    width: "100%",
+    padding: "7px 10px",
+    borderRadius: 7,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.05)",
+    color: "white",
+    fontSize: 13,
+    outline: "none",
+  };
+  const fLabel: React.CSSProperties = {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    display: "block",
+    marginBottom: 4,
+  };
+
+  return (
+    <div
+      style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}
+    >
+      {/* Top Action Row */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 10,
+          alignItems: "center",
+        }}
+      >
+        <button
+          type="button"
+          data-ocid="admin.audit.new_bill_btn"
+          onClick={() => {
+            window.location.href = "/#/pos";
+          }}
+          style={{
+            padding: "12px 20px",
+            borderRadius: 10,
+            border: "2px solid #f59e0b",
+            background: "linear-gradient(135deg,#f59e0b,#d97706)",
+            color: "#1a1a1a",
+            fontWeight: 800,
+            fontSize: 14,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <BarChart3 size={16} />+ Create New Bill / Order
+        </button>
+        <button
+          type="button"
+          data-ocid="admin.audit.add_income.button"
+          onClick={() => {
+            setEditIncomeEntry(null);
+            setIncomeForm({
+              date: todayStr,
+              category: "Counter Sales (POS)",
+              amount: "",
+              paymentMode: "Cash",
+              description: "",
+            });
+            setShowIncomeModal(true);
+          }}
+          style={{
+            padding: "12px 20px",
+            borderRadius: 10,
+            border: "none",
+            background: "#10b981",
+            color: "white",
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          + Add Manual Income
+        </button>
+        <button
+          type="button"
+          data-ocid="admin.audit.add_expense.button"
+          onClick={() => {
+            setEditExpenseEntry(null);
+            setExpenseForm({
+              date: todayStr,
+              category: "Printer Ink/Paper",
+              amount: "",
+              paymentMode: "Cash",
+              note: "",
+            });
+            setShowExpenseModal(true);
+          }}
+          style={{
+            padding: "12px 20px",
+            borderRadius: 10,
+            border: "none",
+            background: "#ef4444",
+            color: "white",
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          + Add Manual Expense
+        </button>
+        <button
+          type="button"
+          data-ocid="admin.audit.generate_report.button"
+          onClick={() => setShowAudit(!showAudit)}
+          style={{
+            padding: "12px 20px",
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.2)",
+            background: showAudit
+              ? "rgba(139,92,246,0.2)"
+              : "rgba(255,255,255,0.06)",
+            color: "white",
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginLeft: "auto",
+          }}
+        >
+          <BarChart3 size={16} color="#a78bfa" />
+          Generate Audit Report
+        </button>
+      </div>
+
+      {/* Ledger Tabs */}
+      <div style={cardBox}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          {(["income", "expense"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              data-ocid={`admin.audit.${t}.tab`}
+              onClick={() => setLedgerTab(t)}
+              style={{
+                padding: "8px 20px",
+                borderRadius: 8,
+                border: "none",
+                background:
+                  ledgerTab === t
+                    ? t === "income"
+                      ? "#10b981"
+                      : "#ef4444"
+                    : "rgba(255,255,255,0.06)",
+                color: ledgerTab === t ? "white" : "rgba(255,255,255,0.5)",
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              {t === "income" ? "Income Details" : "Expense Details"}
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <div
+            style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}
+            data-ocid="admin.audit.loading_state"
+          >
+            Loading...
+          </div>
+        )}
+
+        {ledgerTab === "income" && !loading && (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 13,
+              }}
+            >
+              <thead>
+                <tr
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  {[
+                    "Date",
+                    "Category",
+                    "Amount",
+                    "Payment Mode",
+                    "Description",
+                    ...(isAdmin ? ["Actions"] : []),
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        color: "rgba(255,255,255,0.4)",
+                        fontWeight: 600,
+                        padding: "6px 8px",
+                        textAlign: "left",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {incomes.length === 0 && posSales.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={isAdmin ? 6 : 5}
+                      style={{
+                        color: "rgba(255,255,255,0.3)",
+                        padding: "16px 8px",
+                        textAlign: "center",
+                      }}
+                      data-ocid="admin.audit.income.empty_state"
+                    >
+                      No income entries yet.
+                    </td>
+                  </tr>
+                )}
+                {incomes.map((inc, idx) => (
+                  <tr
+                    key={String(inc.id)}
+                    data-ocid={`admin.audit.income.item.${idx + 1}`}
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+                  >
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.7)",
+                        padding: "6px 8px",
+                      }}
+                    >
+                      {inc.date}
+                    </td>
+                    <td style={{ color: "white", padding: "6px 8px" }}>
+                      {inc.category}
+                    </td>
+                    <td
+                      style={{
+                        color: "#10b981",
+                        fontWeight: 700,
+                        padding: "6px 8px",
+                      }}
+                    >
+                      \u20b9{inc.amount.toFixed(2)}
+                    </td>
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.6)",
+                        padding: "6px 8px",
+                      }}
+                    >
+                      {inc.paymentMode}
+                    </td>
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.5)",
+                        padding: "6px 8px",
+                        maxWidth: 160,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {inc.description}
+                    </td>
+                    {isAdmin && (
+                      <td style={{ padding: "6px 8px" }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            type="button"
+                            data-ocid={`admin.audit.income.edit_button.${idx + 1}`}
+                            onClick={() => {
+                              setEditIncomeEntry(inc);
+                              setIncomeForm({
+                                date: inc.date,
+                                category: inc.category,
+                                amount: String(inc.amount),
+                                paymentMode: inc.paymentMode,
+                                description: inc.description,
+                              });
+                              setShowIncomeModal(true);
+                            }}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: "#3b82f6",
+                              color: "white",
+                              cursor: "pointer",
+                              fontSize: 11,
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            data-ocid={`admin.audit.income.delete_button.${idx + 1}`}
+                            onClick={() =>
+                              setDeleteConfirmId({ type: "income", id: inc.id })
+                            }
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: "#ef4444",
+                              color: "white",
+                              cursor: "pointer",
+                              fontSize: 11,
+                            }}
+                          >
+                            Del
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {posSales.map((s, idx) => {
+                  const d = new Date(Number(s.createdAt) / 1_000_000);
+                  return (
+                    <tr
+                      key={String(s.id)}
+                      data-ocid={`admin.audit.pos_sale.item.${idx + 1}`}
+                      style={{
+                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        opacity: 0.75,
+                      }}
+                    >
+                      <td
+                        style={{
+                          color: "rgba(255,255,255,0.7)",
+                          padding: "6px 8px",
+                        }}
+                      >
+                        {d.toLocaleDateString("en-IN")}
+                      </td>
+                      <td style={{ color: "white", padding: "6px 8px" }}>
+                        Counter Sales (POS)
+                      </td>
+                      <td
+                        style={{
+                          color: "#10b981",
+                          fontWeight: 700,
+                          padding: "6px 8px",
+                        }}
+                      >
+                        \u20b9{s.totalAmount.toFixed(2)}
+                      </td>
+                      <td
+                        style={{
+                          color: "rgba(255,255,255,0.6)",
+                          padding: "6px 8px",
+                        }}
+                      >
+                        {s.paymentMethod}
+                      </td>
+                      <td
+                        style={{
+                          color: "rgba(255,255,255,0.4)",
+                          padding: "6px 8px",
+                          fontSize: 11,
+                        }}
+                      >
+                        Auto — POS Sale
+                      </td>
+                      {isAdmin && (
+                        <td style={{ padding: "6px 8px" }}>
+                          <span
+                            style={{
+                              color: "rgba(255,255,255,0.25)",
+                              fontSize: 11,
+                            }}
+                          >
+                            auto
+                          </span>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {ledgerTab === "expense" && !loading && (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 13,
+              }}
+            >
+              <thead>
+                <tr
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  {[
+                    "Date",
+                    "Category",
+                    "Amount",
+                    "Payment Mode",
+                    "Note",
+                    ...(isAdmin ? ["Actions"] : []),
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        color: "rgba(255,255,255,0.4)",
+                        fontWeight: 600,
+                        padding: "6px 8px",
+                        textAlign: "left",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={isAdmin ? 6 : 5}
+                      style={{
+                        color: "rgba(255,255,255,0.3)",
+                        padding: "16px 8px",
+                        textAlign: "center",
+                      }}
+                      data-ocid="admin.audit.expense.empty_state"
+                    >
+                      No expenses yet.
+                    </td>
+                  </tr>
+                )}
+                {expenses.map((exp, idx) => (
+                  <tr
+                    key={String(exp.id)}
+                    data-ocid={`admin.audit.expense.item.${idx + 1}`}
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+                  >
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.7)",
+                        padding: "6px 8px",
+                      }}
+                    >
+                      {exp.date}
+                    </td>
+                    <td style={{ color: "white", padding: "6px 8px" }}>
+                      {exp.category}
+                    </td>
+                    <td
+                      style={{
+                        color: "#ef4444",
+                        fontWeight: 700,
+                        padding: "6px 8px",
+                      }}
+                    >
+                      \u20b9{exp.amount.toFixed(2)}
+                    </td>
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.6)",
+                        padding: "6px 8px",
+                      }}
+                    >
+                      {exp.paymentMode}
+                    </td>
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.5)",
+                        padding: "6px 8px",
+                        maxWidth: 160,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {exp.note}
+                    </td>
+                    {isAdmin && (
+                      <td style={{ padding: "6px 8px" }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            type="button"
+                            data-ocid={`admin.audit.expense.edit_button.${idx + 1}`}
+                            onClick={() => {
+                              setEditExpenseEntry(exp);
+                              setExpenseForm({
+                                date: exp.date,
+                                category: exp.category,
+                                amount: String(exp.amount),
+                                paymentMode: exp.paymentMode,
+                                note: exp.note,
+                              });
+                              setShowExpenseModal(true);
+                            }}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: "#3b82f6",
+                              color: "white",
+                              cursor: "pointer",
+                              fontSize: 11,
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            data-ocid={`admin.audit.expense.delete_button.${idx + 1}`}
+                            onClick={() =>
+                              setDeleteConfirmId({
+                                type: "expense",
+                                id: exp.id,
+                              })
+                            }
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: "#ef4444",
+                              color: "white",
+                              cursor: "pointer",
+                              fontSize: 11,
+                            }}
+                          >
+                            Del
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Audit Report Panel */}
+      {showAudit && (
+        <div style={cardBox}>
+          <h3
+            style={{
+              color: "white",
+              fontWeight: 700,
+              fontSize: 16,
+              marginBottom: 16,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <BarChart3 size={18} color="#a78bfa" /> Audit Report
+          </h3>
+          <div style={{ marginBottom: 16 }}>
+            <p style={fLabel}>Timeframe</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {(["today", "month"] as const).map((tf) => (
+                <button
+                  key={tf}
+                  type="button"
+                  data-ocid={`admin.audit.filter.${tf}.button`}
+                  onClick={() => setAuditTimeframe(tf)}
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: 8,
+                    border: "none",
+                    background:
+                      auditTimeframe === tf
+                        ? "#7c3aed"
+                        : "rgba(255,255,255,0.07)",
+                    color:
+                      auditTimeframe === tf ? "white" : "rgba(255,255,255,0.6)",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  {tf === "today" ? "Today" : "This Month"}
+                </button>
+              ))}
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    data-ocid="admin.audit.filter.yesterday.button"
+                    onClick={() => setAuditTimeframe("yesterday")}
+                    style={{
+                      padding: "7px 16px",
+                      borderRadius: 8,
+                      border: "none",
+                      background:
+                        auditTimeframe === "yesterday"
+                          ? "#7c3aed"
+                          : "rgba(255,255,255,0.07)",
+                      color:
+                        auditTimeframe === "yesterday"
+                          ? "white"
+                          : "rgba(255,255,255,0.6)",
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Yesterday
+                  </button>
+                  <button
+                    type="button"
+                    data-ocid="admin.audit.filter.fy.button"
+                    onClick={() => setAuditTimeframe("fy")}
+                    style={{
+                      padding: "7px 16px",
+                      borderRadius: 8,
+                      border: "none",
+                      background:
+                        auditTimeframe === "fy"
+                          ? "#7c3aed"
+                          : "rgba(255,255,255,0.07)",
+                      color:
+                        auditTimeframe === "fy"
+                          ? "white"
+                          : "rgba(255,255,255,0.6)",
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    This Financial Year
+                  </button>
+                  <button
+                    type="button"
+                    data-ocid="admin.audit.filter.custom.button"
+                    onClick={() => setAuditTimeframe("custom")}
+                    style={{
+                      padding: "7px 16px",
+                      borderRadius: 8,
+                      border: "none",
+                      background:
+                        auditTimeframe === "custom"
+                          ? "#7c3aed"
+                          : "rgba(255,255,255,0.07)",
+                      color:
+                        auditTimeframe === "custom"
+                          ? "white"
+                          : "rgba(255,255,255,0.6)",
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Custom Range
+                  </button>
+                </>
+              )}
+            </div>
+            {isAdmin && auditTimeframe === "custom" && (
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="audit-custom-from" style={fLabel}>
+                    From
+                  </label>
+                  <input
+                    id="audit-custom-from"
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    style={inp}
+                    data-ocid="admin.audit.custom_from.input"
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="audit-custom-to" style={fLabel}>
+                    To
+                  </label>
+                  <input
+                    id="audit-custom-to"
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    style={inp}
+                    data-ocid="admin.audit.custom_to.input"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr 1fr",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <div>
+              <label htmlFor="audit-min-amount" style={fLabel}>
+                Min Amount (Rs.)
+              </label>
+              <input
+                id="audit-min-amount"
+                type="number"
+                placeholder="0"
+                value={filterMinAmount}
+                onChange={(e) => setFilterMinAmount(e.target.value)}
+                style={inp}
+                data-ocid="admin.audit.min_amount.input"
+              />
+            </div>
+            <div>
+              <label htmlFor="audit-max-amount" style={fLabel}>
+                Max Amount (Rs.)
+              </label>
+              <input
+                id="audit-max-amount"
+                type="number"
+                placeholder="No limit"
+                value={filterMaxAmount}
+                onChange={(e) => setFilterMaxAmount(e.target.value)}
+                style={inp}
+                data-ocid="admin.audit.max_amount.input"
+              />
+            </div>
+            <div>
+              <label htmlFor="audit-payment-mode" style={fLabel}>
+                Payment Mode
+              </label>
+              <select
+                id="audit-payment-mode"
+                value={filterPaymentMode}
+                onChange={(e) => setFilterPaymentMode(e.target.value)}
+                style={inp}
+                data-ocid="admin.audit.payment_mode.select"
+              >
+                {["All", "Cash", "UPI", "Bank Transfer", "Split", "Khata"].map(
+                  (m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ),
+                )}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="audit-tx-type" style={fLabel}>
+                Transaction Type
+              </label>
+              <select
+                id="audit-tx-type"
+                value={filterTxType}
+                onChange={(e) => setFilterTxType(e.target.value)}
+                style={inp}
+                data-ocid="admin.audit.tx_type.select"
+              >
+                {["All", "Income Only", "Expenses Only"].map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 12,
+              marginBottom: 20,
+            }}
+          >
+            {[
+              {
+                label: "Total Income",
+                value: filteredIncome,
+                color: "#10b981",
+                bg: "rgba(16,185,129,0.1)",
+                border: "rgba(16,185,129,0.3)",
+              },
+              {
+                label: "Total Expenses",
+                value: filteredExpense,
+                color: "#ef4444",
+                bg: "rgba(239,68,68,0.1)",
+                border: "rgba(239,68,68,0.3)",
+              },
+              {
+                label: "Net Profit",
+                value: filteredNet,
+                color: filteredNet >= 0 ? "#3b82f6" : "#f59e0b",
+                bg: "rgba(59,130,246,0.1)",
+                border: "rgba(59,130,246,0.3)",
+              },
+            ].map((c) => (
+              <div
+                key={c.label}
+                style={{
+                  background: c.bg,
+                  border: `1px solid ${c.border}`,
+                  borderRadius: 10,
+                  padding: "14px 16px",
+                }}
+              >
+                <p
+                  style={{
+                    color: "rgba(255,255,255,0.5)",
+                    fontSize: 11,
+                    marginBottom: 6,
+                  }}
+                >
+                  {c.label}
+                </p>
+                <p style={{ color: c.color, fontWeight: 800, fontSize: 22 }}>
+                  {formatRupees(c.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div style={{ overflowX: "auto", marginBottom: 16 }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 13,
+              }}
+            >
+              <thead>
+                <tr
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  {[
+                    "Date",
+                    "Type",
+                    "Category",
+                    "Amount",
+                    "Payment Mode",
+                    "Description",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        color: "rgba(255,255,255,0.4)",
+                        fontWeight: 600,
+                        padding: "6px 8px",
+                        textAlign: "left",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTx.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      style={{
+                        color: "rgba(255,255,255,0.3)",
+                        padding: "16px 8px",
+                        textAlign: "center",
+                      }}
+                      data-ocid="admin.audit.report.empty_state"
+                    >
+                      No transactions match the selected filters.
+                    </td>
+                  </tr>
+                )}
+                {filteredTx.map((tx, idx) => (
+                  <tr
+                    key={`${tx.date.getTime()}-${tx.category}-${idx}`}
+                    data-ocid={`admin.audit.report.item.${idx + 1}`}
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+                  >
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.7)",
+                        padding: "6px 8px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {tx.date.toLocaleDateString("en-IN")}
+                    </td>
+                    <td style={{ padding: "6px 8px" }}>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background:
+                            tx.type === "Income"
+                              ? "rgba(16,185,129,0.15)"
+                              : "rgba(239,68,68,0.15)",
+                          color: tx.type === "Income" ? "#10b981" : "#ef4444",
+                        }}
+                      >
+                        {tx.type}
+                      </span>
+                    </td>
+                    <td style={{ color: "white", padding: "6px 8px" }}>
+                      {tx.category}
+                    </td>
+                    <td
+                      style={{
+                        color: tx.type === "Income" ? "#10b981" : "#ef4444",
+                        fontWeight: 700,
+                        padding: "6px 8px",
+                      }}
+                    >
+                      {formatRupees(tx.amount)}
+                    </td>
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.6)",
+                        padding: "6px 8px",
+                      }}
+                    >
+                      {tx.paymentMode}
+                    </td>
+                    <td
+                      style={{
+                        color: "rgba(255,255,255,0.5)",
+                        padding: "6px 8px",
+                        maxWidth: 160,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {tx.description}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              type="button"
+              data-ocid="admin.audit.export_pdf.button"
+              onClick={exportPDF}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 8,
+                border: "none",
+                background: "#7c3aed",
+                color: "white",
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Export as PDF
+            </button>
+            <button
+              type="button"
+              data-ocid="admin.audit.export_csv.button"
+              onClick={exportCSV}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 8,
+                border: "none",
+                background: "#0369a1",
+                color: "white",
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Export as CSV
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Income Entry Modal */}
+      {showIncomeModal && (
+        <div
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowIncomeModal(false);
+              setEditIncomeEntry(null);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setShowIncomeModal(false);
+              setEditIncomeEntry(null);
+            }
+          }}
+        >
+          <div
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 14,
+              padding: 24,
+              width: "100%",
+              maxWidth: 480,
+              maxHeight: "85vh",
+              overflowY: "auto",
+            }}
+            data-ocid="admin.audit.income.modal"
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 18,
+              }}
+            >
+              <h3 style={{ color: "white", fontWeight: 700, fontSize: 17 }}>
+                {editIncomeEntry ? "Edit Income" : "+ Add Manual Income"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowIncomeModal(false);
+                  setEditIncomeEntry(null);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "rgba(255,255,255,0.4)",
+                  cursor: "pointer",
+                  fontSize: 18,
+                }}
+              >
+                X
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label htmlFor="income-date-modal" style={fLabel}>
+                  Date
+                </label>
+                <input
+                  id="income-date-modal"
+                  type="date"
+                  value={incomeForm.date}
+                  onChange={(e) =>
+                    setIncomeForm((p) => ({ ...p, date: e.target.value }))
+                  }
+                  style={inp}
+                  data-ocid="admin.audit.income.date.input"
+                />
+              </div>
+              <div>
+                <label htmlFor="income-category" style={fLabel}>
+                  Category
+                </label>
+                <select
+                  id="income-category"
+                  value={incomeForm.category}
+                  onChange={(e) =>
+                    setIncomeForm((p) => ({ ...p, category: e.target.value }))
+                  }
+                  style={inp}
+                  data-ocid="admin.audit.income.category.select"
+                >
+                  {INCOME_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="income-amount-modal" style={fLabel}>
+                  Amount (Rs.)
+                </label>
+                <input
+                  id="income-amount-modal"
+                  type="number"
+                  placeholder="0.00"
+                  value={incomeForm.amount}
+                  onChange={(e) =>
+                    setIncomeForm((p) => ({ ...p, amount: e.target.value }))
+                  }
+                  style={inp}
+                  data-ocid="admin.audit.income.amount.input"
+                />
+              </div>
+              <div>
+                <label htmlFor="income-payment-mode" style={fLabel}>
+                  Payment Mode
+                </label>
+                <select
+                  id="income-payment-mode"
+                  value={incomeForm.paymentMode}
+                  onChange={(e) =>
+                    setIncomeForm((p) => ({
+                      ...p,
+                      paymentMode: e.target.value,
+                    }))
+                  }
+                  style={inp}
+                  data-ocid="admin.audit.income.payment_mode.select"
+                >
+                  {PAYMENT_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="income-description-modal" style={fLabel}>
+                  Description / Note
+                </label>
+                <textarea
+                  id="income-description-modal"
+                  value={incomeForm.description}
+                  onChange={(e) =>
+                    setIncomeForm((p) => ({
+                      ...p,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Optional note..."
+                  rows={3}
+                  style={{ ...inp, resize: "vertical" }}
+                  data-ocid="admin.audit.income.description.textarea"
+                />
+              </div>
+              <button
+                type="button"
+                data-ocid="admin.audit.income.submit_button"
+                disabled={saving}
+                onClick={handleAddIncome}
+                style={{
+                  padding: "11px",
+                  borderRadius: 9,
+                  border: "none",
+                  background: "#10b981",
+                  color: "white",
+                  fontWeight: 800,
+                  fontSize: 15,
+                  cursor: "pointer",
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving
+                  ? "Saving..."
+                  : editIncomeEntry
+                    ? "Save Changes"
+                    : "Add Income"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expense Entry Modal */}
+      {showExpenseModal && (
+        <div
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowExpenseModal(false);
+              setEditExpenseEntry(null);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setShowExpenseModal(false);
+              setEditExpenseEntry(null);
+            }
+          }}
+        >
+          <div
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 14,
+              padding: 24,
+              width: "100%",
+              maxWidth: 480,
+              maxHeight: "85vh",
+              overflowY: "auto",
+            }}
+            data-ocid="admin.audit.expense.modal"
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 18,
+              }}
+            >
+              <h3 style={{ color: "white", fontWeight: 700, fontSize: 17 }}>
+                {editExpenseEntry ? "Edit Expense" : "+ Add Manual Expense"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExpenseModal(false);
+                  setEditExpenseEntry(null);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "rgba(255,255,255,0.4)",
+                  cursor: "pointer",
+                  fontSize: 18,
+                }}
+              >
+                X
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label htmlFor="expense-date-modal" style={fLabel}>
+                  Date
+                </label>
+                <input
+                  id="expense-date-modal"
+                  type="date"
+                  value={expenseForm.date}
+                  onChange={(e) =>
+                    setExpenseForm((p) => ({ ...p, date: e.target.value }))
+                  }
+                  style={inp}
+                  data-ocid="admin.audit.expense.date.input"
+                />
+              </div>
+              <div>
+                <label htmlFor="expense-category" style={fLabel}>
+                  Category
+                </label>
+                <select
+                  id="expense-category"
+                  value={expenseForm.category}
+                  onChange={(e) =>
+                    setExpenseForm((p) => ({ ...p, category: e.target.value }))
+                  }
+                  style={inp}
+                  data-ocid="admin.audit.expense.category.select"
+                >
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="expense-amount-modal" style={fLabel}>
+                  Amount (Rs.)
+                </label>
+                <input
+                  id="expense-amount-modal"
+                  type="number"
+                  placeholder="0.00"
+                  value={expenseForm.amount}
+                  onChange={(e) =>
+                    setExpenseForm((p) => ({ ...p, amount: e.target.value }))
+                  }
+                  style={inp}
+                  data-ocid="admin.audit.expense.amount.input"
+                />
+              </div>
+              <div>
+                <label htmlFor="expense-payment-mode" style={fLabel}>
+                  Payment Mode
+                </label>
+                <select
+                  id="expense-payment-mode"
+                  value={expenseForm.paymentMode}
+                  onChange={(e) =>
+                    setExpenseForm((p) => ({
+                      ...p,
+                      paymentMode: e.target.value,
+                    }))
+                  }
+                  style={inp}
+                  data-ocid="admin.audit.expense.payment_mode.select"
+                >
+                  {PAYMENT_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="expense-note-modal" style={fLabel}>
+                  Note
+                </label>
+                <textarea
+                  id="expense-note-modal"
+                  value={expenseForm.note}
+                  onChange={(e) =>
+                    setExpenseForm((p) => ({ ...p, note: e.target.value }))
+                  }
+                  placeholder="Optional note..."
+                  rows={3}
+                  style={{ ...inp, resize: "vertical" }}
+                  data-ocid="admin.audit.expense.note.textarea"
+                />
+              </div>
+              <button
+                type="button"
+                data-ocid="admin.audit.expense.submit_button"
+                disabled={saving}
+                onClick={handleAddExpense}
+                style={{
+                  padding: "11px",
+                  borderRadius: 9,
+                  border: "none",
+                  background: "#ef4444",
+                  color: "white",
+                  fontWeight: 800,
+                  fontSize: 15,
+                  cursor: "pointer",
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving
+                  ? "Saving..."
+                  : editExpenseEntry
+                    ? "Save Changes"
+                    : "Add Expense"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteConfirmId && (
+        <div
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 400,
+            background: "rgba(0,0,0,0.8)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(239,68,68,0.4)",
+              borderRadius: 14,
+              padding: 24,
+              maxWidth: 380,
+            }}
+            data-ocid="admin.audit.delete.dialog"
+          >
+            <h3
+              style={{
+                color: "white",
+                fontWeight: 700,
+                fontSize: 16,
+                marginBottom: 10,
+              }}
+            >
+              Confirm Delete
+            </h3>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.6)",
+                fontSize: 14,
+                marginBottom: 20,
+              }}
+            >
+              This action cannot be undone. Are you sure?
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                data-ocid="admin.audit.delete.confirm_button"
+                onClick={handleDelete}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#ef4444",
+                  color: "white",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                data-ocid="admin.audit.delete.cancel_button"
+                onClick={() => setDeleteConfirmId(null)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: "transparent",
+                  color: "white",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 export default function AdminDashboard() {
   const { actor, isFetching } = useActor();
   const [isAdmin, setIsAdmin] = useState<boolean>(
@@ -6355,6 +8462,7 @@ export default function AdminDashboard() {
     wallet: "Customer Wallet",
     reviews: "Customer Reviews",
     "b2b-leads": "B2B Leads & Quotes",
+    audit: "Audit & Reports",
   };
 
   // ── View: Not logged in ──────────────────────────────────────────────────────
@@ -6533,6 +8641,16 @@ export default function AdminDashboard() {
             ocid="admin.b2b_leads.tab"
             onClick={() => {
               setActiveSection("b2b-leads");
+              setSidebarOpen(false);
+            }}
+          />
+          <NavItem
+            icon={BarChart3}
+            label="Audit & Reports"
+            active={activeSection === "audit"}
+            ocid="admin.audit.tab"
+            onClick={() => {
+              setActiveSection("audit");
               setSidebarOpen(false);
             }}
           />
@@ -6738,6 +8856,9 @@ export default function AdminDashboard() {
           )}
           {activeSection === "b2b-leads" && (
             <B2BLeadsSection actor={actor as unknown as backendInterface} />
+          )}
+          {activeSection === "audit" && (
+            <AuditReportsSection isAdmin={isAdmin} />
           )}
         </main>
       </div>
