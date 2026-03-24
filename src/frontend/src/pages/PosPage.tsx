@@ -552,7 +552,7 @@ function CatalogPanel({
         </div>
       ) : (
         /* ── List View (ERP-style compact table) ── */
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
           {loading && (
             <div
               data-ocid="pos.catalog.loading_state"
@@ -583,6 +583,7 @@ function CatalogPanel({
                 width: "100%",
                 borderCollapse: "collapse",
                 fontSize: 12,
+                minWidth: 480,
               }}
             >
               <thead>
@@ -599,6 +600,7 @@ function CatalogPanel({
                       color: "rgba(255,255,255,0.5)",
                       fontWeight: 600,
                       fontSize: 11,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     Item
@@ -610,6 +612,7 @@ function CatalogPanel({
                       color: "rgba(255,255,255,0.5)",
                       fontWeight: 600,
                       fontSize: 11,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     Category
@@ -621,6 +624,7 @@ function CatalogPanel({
                       color: "rgba(255,255,255,0.5)",
                       fontWeight: 600,
                       fontSize: 11,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     Rate (₹)

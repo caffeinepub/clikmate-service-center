@@ -1998,153 +1998,137 @@ function CatalogSection({
             <p style={{ fontSize: 13 }}>Add your first item to get started!</p>
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={S.tableHeader}>
-                {[
-                  "Thumbnail",
-                  "Item Name",
-                  "Category",
-                  "Price",
-                  ...(catalogTab === "products" ? ["Stock"] : []),
-                  "Status",
-                  "Actions",
-                ].map((h) => (
-                  <th
-                    key={h}
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                minWidth: 600,
+              }}
+            >
+              <thead>
+                <tr style={S.tableHeader}>
+                  {[
+                    "Thumbnail",
+                    "Item Name",
+                    "Category",
+                    "Price",
+                    ...(catalogTab === "products" ? ["Stock"] : []),
+                    "Status",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        color: "rgba(255,255,255,0.4)",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.07em",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => (
+                  <tr
+                    key={String(item.id)}
+                    data-ocid={`admin.catalog.row.${idx + 1}`}
                     style={{
-                      padding: "12px 16px",
-                      textAlign: "left",
-                      color: "rgba(255,255,255,0.4)",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.07em",
+                      backgroundColor: idx % 2 === 0 ? "#111827" : "#0f1729",
+                      borderTop: "1px solid rgba(255,255,255,0.05)",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (
+                        e.currentTarget as HTMLTableRowElement
+                      ).style.backgroundColor = "rgba(139,92,246,0.08)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (
+                        e.currentTarget as HTMLTableRowElement
+                      ).style.backgroundColor =
+                        idx % 2 === 0 ? "#111827" : "#0f1729";
                     }}
                   >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item, idx) => (
-                <tr
-                  key={String(item.id)}
-                  data-ocid={`admin.catalog.row.${idx + 1}`}
-                  style={{
-                    backgroundColor: idx % 2 === 0 ? "#111827" : "#0f1729",
-                    borderTop: "1px solid rgba(255,255,255,0.05)",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    (
-                      e.currentTarget as HTMLTableRowElement
-                    ).style.backgroundColor = "rgba(139,92,246,0.08)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (
-                      e.currentTarget as HTMLTableRowElement
-                    ).style.backgroundColor =
-                      idx % 2 === 0 ? "#111827" : "#0f1729";
-                  }}
-                >
-                  <td style={{ padding: "12px 16px" }}>
-                    {item.mediaFiles.length > 0 ? (
-                      <img
-                        src={item.mediaFiles[0].getDirectURL()}
-                        alt={item.name}
-                        style={{
-                          width: 48,
-                          height: 48,
-                          objectFit: "cover",
-                          borderRadius: 8,
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 8,
-                          background:
-                            "linear-gradient(135deg, #7c3aed, #3b82f6)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Package
-                          style={{ width: 20, height: 20, color: "white" }}
+                    <td style={{ padding: "12px 16px" }}>
+                      {item.mediaFiles.length > 0 ? (
+                        <img
+                          src={item.mediaFiles[0].getDirectURL()}
+                          alt={item.name}
+                          style={{
+                            width: 48,
+                            height: 48,
+                            objectFit: "cover",
+                            borderRadius: 8,
+                          }}
                         />
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <div
-                      style={{ color: "white", fontWeight: 600, fontSize: 14 }}
-                    >
-                      {item.name}
-                    </div>
-                    {item.description && (
-                      <div
-                        style={{
-                          color: "rgba(255,255,255,0.4)",
-                          fontSize: 12,
-                          marginTop: 2,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          maxWidth: 200,
-                        }}
-                      >
-                        {item.description}
-                      </div>
-                    )}
-                    {item.category === "CSC & Govt Services" &&
-                      item.requiredDocuments && (
+                      ) : (
                         <div
                           style={{
-                            color: "#a78bfa",
-                            fontSize: 11,
-                            marginTop: 4,
+                            width: 48,
+                            height: 48,
+                            borderRadius: 8,
+                            background:
+                              "linear-gradient(135deg, #7c3aed, #3b82f6)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Package
+                            style={{ width: 20, height: 20, color: "white" }}
+                          />
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div
+                        style={{
+                          color: "white",
+                          fontWeight: 600,
+                          fontSize: 14,
+                        }}
+                      >
+                        {item.name}
+                      </div>
+                      {item.description && (
+                        <div
+                          style={{
+                            color: "rgba(255,255,255,0.4)",
+                            fontSize: 12,
+                            marginTop: 2,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
                             maxWidth: 200,
                           }}
                         >
-                          📄 Docs: {item.requiredDocuments}
+                          {item.description}
                         </div>
                       )}
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "3px 10px",
-                        borderRadius: 20,
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                      className={
-                        CATEGORY_COLORS[item.category] ||
-                        "bg-gray-500/20 text-gray-300"
-                      }
-                    >
-                      {item.category}
-                    </span>
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "white",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {item.price}
-                  </td>
-                  {catalogTab === "products" && (
+                      {item.category === "CSC & Govt Services" &&
+                        item.requiredDocuments && (
+                          <div
+                            style={{
+                              color: "#a78bfa",
+                              fontSize: 11,
+                              marginTop: 4,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: 200,
+                            }}
+                          >
+                            📄 Docs: {item.requiredDocuments}
+                          </div>
+                        )}
+                    </td>
                     <td style={{ padding: "12px 16px" }}>
                       <span
                         style={{
@@ -2153,172 +2137,200 @@ function CatalogSection({
                           borderRadius: 20,
                           fontSize: 12,
                           fontWeight: 600,
-                          backgroundColor:
-                            item.stockStatus === "In Stock"
-                              ? "rgba(16,185,129,0.15)"
-                              : item.stockStatus === "Out of Stock"
-                                ? "rgba(239,68,68,0.15)"
-                                : "rgba(245,158,11,0.15)",
-                          color:
-                            item.stockStatus === "In Stock"
-                              ? "#34d399"
-                              : item.stockStatus === "Out of Stock"
-                                ? "#f87171"
-                                : "#fbbf24",
                         }}
+                        className={
+                          CATEGORY_COLORS[item.category] ||
+                          "bg-gray-500/20 text-gray-300"
+                        }
                       >
-                        {item.stockStatus}
+                        {item.category}
                       </span>
                     </td>
-                  )}
-                  <td style={{ padding: "12px 16px" }}>
-                    <span
+                    <td
                       style={{
-                        display: "inline-block",
-                        padding: "3px 10px",
-                        borderRadius: 20,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        backgroundColor: item.published
-                          ? "rgba(16,185,129,0.15)"
-                          : "rgba(100,116,139,0.15)",
-                        color: item.published ? "#34d399" : "#94a3b8",
+                        padding: "12px 16px",
+                        color: "white",
+                        fontWeight: 700,
                       }}
                     >
-                      {item.published ? "Published" : "Hidden"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button
-                        type="button"
-                        data-ocid={`admin.catalog.edit_button.${idx + 1}`}
-                        onClick={() => {
-                          setEditItem(item);
-                          setAddEditOpen(true);
-                        }}
-                        title="Edit"
+                      {item.price}
+                    </td>
+                    {catalogTab === "products" && (
+                      <td style={{ padding: "12px 16px" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "3px 10px",
+                            borderRadius: 20,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            backgroundColor:
+                              item.stockStatus === "In Stock"
+                                ? "rgba(16,185,129,0.15)"
+                                : item.stockStatus === "Out of Stock"
+                                  ? "rgba(239,68,68,0.15)"
+                                  : "rgba(245,158,11,0.15)",
+                            color:
+                              item.stockStatus === "In Stock"
+                                ? "#34d399"
+                                : item.stockStatus === "Out of Stock"
+                                  ? "#f87171"
+                                  : "#fbbf24",
+                          }}
+                        >
+                          {item.stockStatus}
+                        </span>
+                      </td>
+                    )}
+                    <td style={{ padding: "12px 16px" }}>
+                      <span
                         style={{
-                          padding: 6,
-                          borderRadius: 6,
-                          border: "none",
-                          background: "transparent",
-                          cursor: "pointer",
-                          color: "rgba(255,255,255,0.5)",
-                          transition: "all 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.color =
-                            "#c4b5fd";
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.backgroundColor = "rgba(139,92,246,0.15)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.color =
-                            "rgba(255,255,255,0.5)";
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.backgroundColor = "transparent";
+                          display: "inline-block",
+                          padding: "3px 10px",
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          backgroundColor: item.published
+                            ? "rgba(16,185,129,0.15)"
+                            : "rgba(100,116,139,0.15)",
+                          color: item.published ? "#34d399" : "#94a3b8",
                         }}
                       >
-                        <Edit2 style={{ width: 15, height: 15 }} />
-                      </button>
-                      <button
-                        type="button"
-                        data-ocid={`admin.catalog.toggle.${idx + 1}`}
-                        onClick={() => handleTogglePublish(item)}
-                        title={item.published ? "Hide" : "Publish"}
-                        disabled={togglingId === item.id}
-                        style={{
-                          padding: 6,
-                          borderRadius: 6,
-                          border: "none",
-                          background: "transparent",
-                          cursor: "pointer",
-                          color: "rgba(255,255,255,0.5)",
-                          transition: "all 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.color =
-                            "#67e8f9";
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.backgroundColor = "rgba(6,182,212,0.1)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.color =
-                            "rgba(255,255,255,0.5)";
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.backgroundColor = "transparent";
-                        }}
-                      >
-                        {togglingId === item.id ? (
-                          <Loader2
-                            style={{
-                              width: 15,
-                              height: 15,
-                              animation: "spin 1s linear infinite",
-                            }}
-                          />
-                        ) : item.published ? (
-                          <EyeOff style={{ width: 15, height: 15 }} />
-                        ) : (
-                          <Eye style={{ width: 15, height: 15 }} />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        data-ocid={`admin.catalog.delete_button.${idx + 1}`}
-                        onClick={() => {
-                          setDeleteTarget(item);
-                          setDeleteOpen(true);
-                        }}
-                        title="Delete"
-                        disabled={deletingId === item.id}
-                        style={{
-                          padding: 6,
-                          borderRadius: 6,
-                          border: "none",
-                          background: "transparent",
-                          cursor: "pointer",
-                          color: "rgba(255,255,255,0.5)",
-                          transition: "all 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.color =
-                            "#f87171";
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.backgroundColor = "rgba(239,68,68,0.1)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.color =
-                            "rgba(255,255,255,0.5)";
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.backgroundColor = "transparent";
-                        }}
-                      >
-                        {deletingId === item.id ? (
-                          <Loader2
-                            style={{
-                              width: 15,
-                              height: 15,
-                              animation: "spin 1s linear infinite",
-                            }}
-                          />
-                        ) : (
-                          <Trash2 style={{ width: 15, height: 15 }} />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        {item.published ? "Published" : "Hidden"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button
+                          type="button"
+                          data-ocid={`admin.catalog.edit_button.${idx + 1}`}
+                          onClick={() => {
+                            setEditItem(item);
+                            setAddEditOpen(true);
+                          }}
+                          title="Edit"
+                          style={{
+                            padding: 6,
+                            borderRadius: 6,
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            color: "rgba(255,255,255,0.5)",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color =
+                              "#c4b5fd";
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.backgroundColor = "rgba(139,92,246,0.15)";
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color =
+                              "rgba(255,255,255,0.5)";
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.backgroundColor = "transparent";
+                          }}
+                        >
+                          <Edit2 style={{ width: 15, height: 15 }} />
+                        </button>
+                        <button
+                          type="button"
+                          data-ocid={`admin.catalog.toggle.${idx + 1}`}
+                          onClick={() => handleTogglePublish(item)}
+                          title={item.published ? "Hide" : "Publish"}
+                          disabled={togglingId === item.id}
+                          style={{
+                            padding: 6,
+                            borderRadius: 6,
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            color: "rgba(255,255,255,0.5)",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color =
+                              "#67e8f9";
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.backgroundColor = "rgba(6,182,212,0.1)";
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color =
+                              "rgba(255,255,255,0.5)";
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.backgroundColor = "transparent";
+                          }}
+                        >
+                          {togglingId === item.id ? (
+                            <Loader2
+                              style={{
+                                width: 15,
+                                height: 15,
+                                animation: "spin 1s linear infinite",
+                              }}
+                            />
+                          ) : item.published ? (
+                            <EyeOff style={{ width: 15, height: 15 }} />
+                          ) : (
+                            <Eye style={{ width: 15, height: 15 }} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          data-ocid={`admin.catalog.delete_button.${idx + 1}`}
+                          onClick={() => {
+                            setDeleteTarget(item);
+                            setDeleteOpen(true);
+                          }}
+                          title="Delete"
+                          disabled={deletingId === item.id}
+                          style={{
+                            padding: 6,
+                            borderRadius: 6,
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            color: "rgba(255,255,255,0.5)",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color =
+                              "#f87171";
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.backgroundColor = "rgba(239,68,68,0.1)";
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color =
+                              "rgba(255,255,255,0.5)";
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.backgroundColor = "transparent";
+                          }}
+                        >
+                          {deletingId === item.id ? (
+                            <Loader2
+                              style={{
+                                width: 15,
+                                height: 15,
+                                animation: "spin 1s linear infinite",
+                              }}
+                            />
+                          ) : (
+                            <Trash2 style={{ width: 15, height: 15 }} />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -2610,166 +2622,174 @@ function OrdersSection({ actor }: { actor: backendInterface | null }) {
             <p style={{ fontWeight: 600 }}>No orders yet</p>
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={S.tableHeader}>
-                {[
-                  "Order ID",
-                  "Customer",
-                  "Service",
-                  "Status",
-                  "Date",
-                  "Files",
-                  "Actions",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: "12px 16px",
-                      textAlign: "left",
-                      color: "rgba(255,255,255,0.4)",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.07em",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order, idx) => (
-                <tr
-                  key={String(order.id)}
-                  data-ocid={`admin.orders.row.${idx + 1}`}
-                  style={{
-                    backgroundColor: idx % 2 === 0 ? "#111827" : "#0f1729",
-                    borderTop: "1px solid rgba(255,255,255,0.05)",
-                  }}
-                >
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "#a78bfa",
-                      fontWeight: 600,
-                      fontSize: 13,
-                    }}
-                  >
-                    #{String(order.id)}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "white",
-                      fontSize: 14,
-                    }}
-                  >
-                    {order.name}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "rgba(255,255,255,0.6)",
-                      fontSize: 13,
-                    }}
-                  >
-                    {order.serviceType}
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <OrderStatusBadge status={order.status} />
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "rgba(255,255,255,0.4)",
-                      fontSize: 12,
-                    }}
-                  >
-                    {new Date(
-                      Number(order.submittedAt) / 1_000_000,
-                    ).toLocaleDateString()}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "rgba(255,255,255,0.4)",
-                      fontSize: 12,
-                    }}
-                  >
-                    {order.uploadedFiles.length} file(s)
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <div
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                minWidth: 700,
+              }}
+            >
+              <thead>
+                <tr style={S.tableHeader}>
+                  {[
+                    "Order ID",
+                    "Customer",
+                    "Service",
+                    "Status",
+                    "Date",
+                    "Files",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
                       style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                        alignItems: "flex-start",
-                        minWidth: 160,
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        color: "rgba(255,255,255,0.4)",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.07em",
                       }}
                     >
-                      {updatingOrderId === order.id ? (
-                        <Loader2
-                          style={{
-                            width: 16,
-                            height: 16,
-                            animation: "spin 1s linear infinite",
-                            color: "#a78bfa",
-                          }}
-                        />
-                      ) : (
-                        <select
-                          data-ocid={`admin.orders.status.${idx + 1}`}
-                          value={order.status}
-                          onChange={(e) =>
-                            handlePrintOrderStatusChange(
-                              order.id,
-                              e.target.value,
-                            )
-                          }
-                          style={{
-                            background: "#1e293b",
-                            color: "#e2e8f0",
-                            border: "1px solid #334155",
-                            borderRadius: 6,
-                            padding: "4px 8px",
-                            fontSize: 12,
-                            cursor: "pointer",
-                          }}
-                        >
-                          {SHOP_ORDER_STATUSES.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      {order.uploadedFiles.length > 0 && (
-                        <button
-                          type="button"
-                          data-ocid={`admin.orders.view_files.${idx + 1}`}
-                          onClick={() => setViewingFiles(order.uploadedFiles)}
-                          style={{
-                            background: "rgba(99,102,241,0.2)",
-                            color: "#818cf8",
-                            border: "1px solid rgba(99,102,241,0.4)",
-                            borderRadius: 6,
-                            padding: "4px 10px",
-                            fontSize: 12,
-                            cursor: "pointer",
-                          }}
-                        >
-                          📂 View Files
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {orders.map((order, idx) => (
+                  <tr
+                    key={String(order.id)}
+                    data-ocid={`admin.orders.row.${idx + 1}`}
+                    style={{
+                      backgroundColor: idx % 2 === 0 ? "#111827" : "#0f1729",
+                      borderTop: "1px solid rgba(255,255,255,0.05)",
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        color: "#a78bfa",
+                        fontWeight: 600,
+                        fontSize: 13,
+                      }}
+                    >
+                      #{String(order.id)}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        color: "white",
+                        fontSize: 14,
+                      }}
+                    >
+                      {order.name}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        color: "rgba(255,255,255,0.6)",
+                        fontSize: 13,
+                      }}
+                    >
+                      {order.serviceType}
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <OrderStatusBadge status={order.status} />
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        color: "rgba(255,255,255,0.4)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {new Date(
+                        Number(order.submittedAt) / 1_000_000,
+                      ).toLocaleDateString()}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        color: "rgba(255,255,255,0.4)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {order.uploadedFiles.length} file(s)
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 6,
+                          alignItems: "flex-start",
+                          minWidth: 160,
+                        }}
+                      >
+                        {updatingOrderId === order.id ? (
+                          <Loader2
+                            style={{
+                              width: 16,
+                              height: 16,
+                              animation: "spin 1s linear infinite",
+                              color: "#a78bfa",
+                            }}
+                          />
+                        ) : (
+                          <select
+                            data-ocid={`admin.orders.status.${idx + 1}`}
+                            value={order.status}
+                            onChange={(e) =>
+                              handlePrintOrderStatusChange(
+                                order.id,
+                                e.target.value,
+                              )
+                            }
+                            style={{
+                              background: "#1e293b",
+                              color: "#e2e8f0",
+                              border: "1px solid #334155",
+                              borderRadius: 6,
+                              padding: "4px 8px",
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {SHOP_ORDER_STATUSES.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {order.uploadedFiles.length > 0 && (
+                          <button
+                            type="button"
+                            data-ocid={`admin.orders.view_files.${idx + 1}`}
+                            onClick={() => setViewingFiles(order.uploadedFiles)}
+                            style={{
+                              background: "rgba(99,102,241,0.2)",
+                              color: "#818cf8",
+                              border: "1px solid rgba(99,102,241,0.4)",
+                              borderRadius: 6,
+                              padding: "4px 10px",
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }}
+                          >
+                            📂 View Files
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
       {viewingFiles && (
@@ -2784,149 +2804,611 @@ function OrdersSection({ actor }: { actor: backendInterface | null }) {
 
 // ─── Live Dashboard Section ───────────────────────────────────────────────────
 
-function DashboardSection({ items }: { items: CatalogItem[] }) {
-  const published = items.filter((i) => i.published).length;
-  const metrics = [
-    { label: "Items Published", value: published, icon: Eye, color: "#10b981" },
+function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
+  const [orders, setOrders] = useState<ShopOrder[]>([]);
+  const [activeFilter, setActiveFilter] = useState<
+    "pending" | "processing" | "delivery" | "revenue" | null
+  >(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const all = await (
+        actor as unknown as { getAllShopOrders: () => Promise<ShopOrder[]> }
+      ).getAllShopOrders();
+      const sorted = [...all].sort(
+        (a, b) => Number(b.createdAt) - Number(a.createdAt),
+      );
+      setOrders(sorted);
+    } catch (e) {
+      console.error("Failed to load orders:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  // Inject print styles once
+  useEffect(() => {
+    if (document.getElementById("clikmate-print-styles")) return;
+    const style = document.createElement("style");
+    style.id = "clikmate-print-styles";
+    style.textContent = `
+      @media print {
+        body * { visibility: hidden; }
+        #live-dashboard-print-area, #live-dashboard-print-area * { visibility: visible; }
+        #live-dashboard-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+        nav, header, aside, .no-print { display: none !important; }
+        @page { size: A4; margin: 15mm; }
+        body { background: white !important; color: black !important; }
+        #print-report-header { display: block !important; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th, td { border: 1px solid #333; padding: 6px 8px; text-align: left; color: black !important; background: white !important; }
+        th { background: #f0f0f0 !important; font-weight: 700; }
+        * { box-shadow: none !important; border-radius: 0 !important; }
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const pendingOrders = orders.filter((o) => o.status === "Pending");
+  const processingOrders = orders.filter(
+    (o) =>
+      o.status === "Processing/Printing" || o.status === "Ready for Pickup",
+  );
+  const deliveryOrders = orders.filter(
+    (o) => o.status === "Out for Delivery" || o.status === "Ready for Delivery",
+  );
+  const todayOrders = orders.filter((o) => {
+    const d = new Date(Number(o.createdAt) / 1_000_000);
+    return d >= today;
+  });
+  const todayRevenue = todayOrders.reduce(
+    (sum, o) => sum + Number(o.totalAmount),
+    0,
+  );
+
+  const filteredOrders = (() => {
+    if (activeFilter === "pending") return pendingOrders;
+    if (activeFilter === "processing") return processingOrders;
+    if (activeFilter === "delivery") return deliveryOrders;
+    if (activeFilter === "revenue") return todayOrders;
+    return orders;
+  })();
+
+  const handleAction = async (order: ShopOrder) => {
+    let newStatus = "";
+    if (order.status === "Pending") newStatus = "Processing/Printing";
+    else if (order.status === "Processing/Printing")
+      newStatus = "Ready for Pickup";
+    else if (order.status === "Ready for Pickup")
+      newStatus = "Out for Delivery";
+    else if (order.status === "Ready for Delivery")
+      newStatus = "Out for Delivery";
+    else return;
+
+    try {
+      await (
+        actor as unknown as {
+          updateShopOrderStatus: (id: bigint, status: string) => Promise<void>;
+        }
+      ).updateShopOrderStatus(order.id, newStatus);
+      await loadOrders();
+    } catch (e) {
+      console.error("Failed to update order status:", e);
+    }
+  };
+
+  const metricCards = [
     {
-      label: "Total Catalog",
-      value: items.length,
-      icon: Package,
-      color: "#8b5cf6",
-    },
-    {
-      label: "Categories",
-      value: new Set(items.map((i) => i.category)).size,
-      icon: LayoutDashboard,
-      color: "#3b82f6",
-    },
-    {
-      label: "Hidden Items",
-      value: items.filter((i) => !i.published).length,
-      icon: EyeOff,
+      key: "pending" as const,
+      label: "New Orders (Pending)",
+      value: pendingOrders.length,
+      icon: "🕐",
       color: "#f59e0b",
+      bg: "rgba(245,158,11,0.12)",
+      border: "rgba(245,158,11,0.3)",
+    },
+    {
+      key: "processing" as const,
+      label: "Ready for Print / Processing",
+      value: processingOrders.length,
+      icon: "🖨️",
+      color: "#3b82f6",
+      bg: "rgba(59,130,246,0.12)",
+      border: "rgba(59,130,246,0.3)",
+    },
+    {
+      key: "delivery" as const,
+      label: "Out for Delivery / Pickup",
+      value: deliveryOrders.length,
+      icon: "🛵",
+      color: "#a855f7",
+      bg: "rgba(168,85,247,0.12)",
+      border: "rgba(168,85,247,0.3)",
+    },
+    {
+      key: "revenue" as const,
+      label: "Today's Revenue",
+      value: `₹${todayRevenue.toFixed(0)}`,
+      icon: "💰",
+      color: "#10b981",
+      bg: "rgba(16,185,129,0.12)",
+      border: "rgba(16,185,129,0.3)",
     },
   ];
-  const recent = [...items]
-    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
-    .slice(0, 5);
+
   return (
     <div style={{ padding: 24 }}>
+      {/* Toolbar */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 14,
-          marginBottom: 28,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 20,
         }}
+        className="no-print"
       >
-        {metrics.map((m) => (
-          <StatsCard
-            key={m.label}
-            label={m.label}
-            value={m.value}
-            iconColor={m.color}
-            icon={m.icon}
-          />
-        ))}
-      </div>
-      <div style={S.card}>
-        <div
-          style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <h3 style={{ color: "white", fontWeight: 700, fontSize: 15 }}>
-            Recent Catalog Activity
-          </h3>
-        </div>
-        {recent.length === 0 ? (
-          <div
+        <div>
+          <h2
+            style={{ color: "white", fontWeight: 700, fontSize: 20, margin: 0 }}
+          >
+            Live Operational Dashboard
+          </h2>
+          <p
             style={{
-              padding: 40,
-              textAlign: "center",
-              color: "rgba(255,255,255,0.3)",
+              color: "rgba(255,255,255,0.4)",
+              fontSize: 13,
+              margin: "4px 0 0",
             }}
           >
-            <p>No items yet. Add your first catalog item!</p>
-          </div>
-        ) : (
-          <div style={{ padding: "8px 0" }}>
-            {recent.map((item) => (
-              <div
-                key={String(item.id)}
+            Real-time orders & revenue metrics
+          </p>
+        </div>
+        <button
+          type="button"
+          data-ocid="dashboard.print_button"
+          onClick={() => window.print()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 18px",
+            borderRadius: 10,
+            border: "none",
+            background: "linear-gradient(135deg, #1e3a5f, #7c3aed)",
+            color: "white",
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(124,58,237,0.35)",
+          }}
+        >
+          🖨️ Print Report (A4)
+        </button>
+      </div>
+
+      <div id="live-dashboard-print-area">
+        {/* Print-only header */}
+        <div id="print-report-header" style={{ display: "none" }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
+            ClikMate — Daily Operations Report
+          </h1>
+          <p style={{ fontSize: 13, color: "#555" }}>
+            {new Date().toLocaleDateString("en-IN", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+          <hr style={{ margin: "8px 0 16px" }} />
+        </div>
+
+        {/* Metric Cards */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 14,
+            marginBottom: 24,
+          }}
+        >
+          {metricCards.map((card) => {
+            const isActive = activeFilter === card.key;
+            return (
+              <button
+                type="button"
+                key={card.key}
+                data-ocid={`dashboard.${card.key}_card`}
+                onClick={() => setActiveFilter(isActive ? null : card.key)}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "10px 20px",
-                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                  background: card.bg,
+                  border: isActive
+                    ? "2px solid #f59e0b"
+                    : `1px solid ${card.border}`,
+                  borderRadius: 12,
+                  padding: "18px 20px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: isActive
+                    ? "0 0 16px rgba(245,158,11,0.3)"
+                    : "none",
+                  userSelect: "none",
                 }}
               >
-                {item.mediaFiles.length > 0 ? (
-                  <img
-                    src={item.mediaFiles[0].getDirectURL()}
-                    alt={item.name}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 8,
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 8,
-                      background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Package
-                      style={{ width: 16, height: 16, color: "white" }}
-                    />
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      color: "white",
-                      fontWeight: 600,
-                      fontSize: 14,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {item.name}
-                  </div>
-                  <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>
-                    {item.category} &bull; {item.price}
-                  </div>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>
+                  {card.icon}
                 </div>
-                <span
+                <div
                   style={{
-                    padding: "3px 10px",
-                    borderRadius: 20,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    backgroundColor: item.published
-                      ? "rgba(16,185,129,0.15)"
-                      : "rgba(100,116,139,0.15)",
-                    color: item.published ? "#34d399" : "#94a3b8",
+                    color: card.color,
+                    fontSize: 28,
+                    fontWeight: 800,
+                    lineHeight: 1,
                   }}
                 >
-                  {item.published ? "Live" : "Draft"}
-                </span>
-              </div>
-            ))}
+                  {card.value}
+                </div>
+                <div
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 13,
+                    marginTop: 6,
+                    fontWeight: 500,
+                  }}
+                >
+                  {card.label}
+                </div>
+                {isActive && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 11,
+                      color: card.color,
+                      fontWeight: 600,
+                    }}
+                  >
+                    ● Filtered
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Filter label */}
+        {activeFilter && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 12,
+            }}
+          >
+            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
+              Showing:{" "}
+              <strong style={{ color: "white" }}>
+                {metricCards.find((c) => c.key === activeFilter)?.label}
+              </strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveFilter(null)}
+              style={{
+                background: "rgba(255,255,255,0.1)",
+                border: "none",
+                borderRadius: 6,
+                color: "rgba(255,255,255,0.6)",
+                padding: "2px 10px",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Clear ×
+            </button>
           </div>
         )}
+
+        {/* Orders Table */}
+        <div
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 12,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "14px 20px",
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <h3
+              style={{
+                color: "white",
+                fontWeight: 700,
+                fontSize: 15,
+                margin: 0,
+              }}
+            >
+              {activeFilter
+                ? metricCards.find((c) => c.key === activeFilter)?.label
+                : "All Orders"}
+              <span
+                style={{
+                  marginLeft: 8,
+                  color: "rgba(255,255,255,0.4)",
+                  fontWeight: 400,
+                  fontSize: 13,
+                }}
+              >
+                ({filteredOrders.length})
+              </span>
+            </h3>
+            <button
+              type="button"
+              onClick={loadOrders}
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                border: "none",
+                borderRadius: 6,
+                color: "rgba(255,255,255,0.5)",
+                padding: "4px 12px",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+              className="no-print"
+            >
+              ↻ Refresh
+            </button>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            {loading ? (
+              <div
+                style={{
+                  padding: 40,
+                  textAlign: "center",
+                  color: "rgba(255,255,255,0.3)",
+                }}
+              >
+                Loading orders...
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div
+                data-ocid="dashboard.empty_state"
+                style={{
+                  padding: 40,
+                  textAlign: "center",
+                  color: "rgba(255,255,255,0.3)",
+                }}
+              >
+                No orders in this category
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+                  >
+                    {[
+                      "Order ID",
+                      "Customer Name",
+                      "Service Detail",
+                      "Amount",
+                      "Status",
+                      "Action",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "left",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: "rgba(255,255,255,0.5)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order, idx) => {
+                    const idStr = String(order.id);
+                    const shortId = idStr.length > 6 ? idStr.slice(-6) : idStr;
+                    const serviceDetail =
+                      (order.items[0] as { itemName?: string } | undefined)
+                        ?.itemName ??
+                      order.deliveryMethod ??
+                      "—";
+                    return (
+                      <tr
+                        key={String(order.id)}
+                        data-ocid={`dashboard.order.item.${idx + 1}`}
+                        style={{
+                          borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "12px 16px",
+                            fontSize: 13,
+                            color: "rgba(255,255,255,0.7)",
+                            fontFamily: "monospace",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          #ORD-{shortId}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 16px",
+                            fontSize: 13,
+                            color: "white",
+                            fontWeight: 500,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {order.customerName || "—"}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 16px",
+                            fontSize: 13,
+                            color: "rgba(255,255,255,0.6)",
+                            maxWidth: 200,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {serviceDetail}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 16px",
+                            fontSize: 13,
+                            color: "#34d399",
+                            fontWeight: 700,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          ₹{Number(order.totalAmount).toFixed(0)}
+                        </td>
+                        <td
+                          style={{ padding: "12px 16px", whiteSpace: "nowrap" }}
+                        >
+                          <ShopOrderStatusBadge status={order.status} />
+                        </td>
+                        <td
+                          style={{ padding: "12px 16px", whiteSpace: "nowrap" }}
+                          className="no-print"
+                        >
+                          {order.status === "Pending" && (
+                            <button
+                              type="button"
+                              data-ocid={`dashboard.accept_button.${idx + 1}`}
+                              onClick={() => handleAction(order)}
+                              style={{
+                                background: "rgba(16,185,129,0.15)",
+                                border: "1px solid rgba(16,185,129,0.3)",
+                                borderRadius: 6,
+                                color: "#34d399",
+                                padding: "5px 12px",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              ✓ Accept
+                            </button>
+                          )}
+                          {order.status === "Processing/Printing" && (
+                            <button
+                              type="button"
+                              data-ocid={`dashboard.ready_button.${idx + 1}`}
+                              onClick={() => handleAction(order)}
+                              style={{
+                                background: "rgba(59,130,246,0.15)",
+                                border: "1px solid rgba(59,130,246,0.3)",
+                                borderRadius: 6,
+                                color: "#60a5fa",
+                                padding: "5px 12px",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              🖨 Mark Ready
+                            </button>
+                          )}
+                          {order.status === "Ready for Pickup" && (
+                            <button
+                              type="button"
+                              data-ocid={`dashboard.dispatch_button.${idx + 1}`}
+                              onClick={() => handleAction(order)}
+                              style={{
+                                background: "rgba(168,85,247,0.15)",
+                                border: "1px solid rgba(168,85,247,0.3)",
+                                borderRadius: 6,
+                                color: "#c084fc",
+                                padding: "5px 12px",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              📦 Out for Delivery
+                            </button>
+                          )}
+                          {order.status === "Ready for Delivery" && (
+                            <button
+                              type="button"
+                              data-ocid={`dashboard.dispatch_button.${idx + 1}`}
+                              onClick={() => handleAction(order)}
+                              style={{
+                                background: "rgba(168,85,247,0.15)",
+                                border: "1px solid rgba(168,85,247,0.3)",
+                                borderRadius: 6,
+                                color: "#c084fc",
+                                padding: "5px 12px",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              🛵 Dispatch
+                            </button>
+                          )}
+                          {order.status === "Out for Delivery" && (
+                            <span
+                              style={{
+                                color: "rgba(255,255,255,0.3)",
+                                fontSize: 12,
+                              }}
+                            >
+                              Awaiting OTP
+                            </span>
+                          )}
+                          {(order.status === "Completed" ||
+                            order.status === "Cancelled") && (
+                            <span
+                              style={{
+                                color: "rgba(255,255,255,0.2)",
+                                fontSize: 12,
+                              }}
+                            >
+                              —
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -5100,8 +5582,16 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
 
   async function handleAddMember() {
     if (!actor) return;
-    if (!name.trim() || mobile.length !== 10 || pin.length !== 4) {
-      toast.error("Please fill all fields correctly.");
+    if (!name.trim()) {
+      toast.error("Please enter the member's full name.");
+      return;
+    }
+    if (mobile.length !== 10) {
+      toast.error("Mobile number must be exactly 10 digits.");
+      return;
+    }
+    if (pin.length !== 4) {
+      toast.error("PIN must be exactly 4 digits.");
       return;
     }
     setAdding(true);
@@ -5112,14 +5602,15 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
         pin,
         role,
       );
-      toast.success("Team member added successfully.");
+      toast.success(`Team member "${name.trim()}" added successfully.`);
       setName("");
       setMobile("");
       setPin("");
       setRole("Shop Staff");
       await loadMembers();
-    } catch {
-      toast.error("Failed to add team member.");
+    } catch (err) {
+      console.error("addTeamMember error:", err);
+      toast.error("Failed to add team member. Please try again.");
     } finally {
       setAdding(false);
     }
@@ -5385,153 +5876,169 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
             </p>
           </div>
         ) : (
-          <table
-            style={{ width: "100%", borderCollapse: "collapse" }}
-            data-ocid="admin.team.table"
-          >
-            <thead>
-              <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                {[
-                  "Name",
-                  "Login ID (Mobile)",
-                  "Role",
-                  "Access PIN",
-                  "Status",
-                  "Action",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: "10px 20px",
-                      textAlign: "left",
-                      color: "#64748b",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member, idx) => (
-                <tr
-                  key={member.mobile}
-                  data-ocid={`admin.team.row.${idx + 1}`}
-                  style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-                >
-                  <td
-                    style={{
-                      padding: "12px 20px",
-                      color: "#f1f5f9",
-                      fontSize: 14,
-                    }}
-                  >
-                    {member.name}
-                  </td>
-                  <td
-                    style={{
-                      padding: "12px 20px",
-                      color: "#94a3b8",
-                      fontSize: 14,
-                    }}
-                  >
-                    {member.mobile}
-                  </td>
-                  <td style={{ padding: "12px 20px" }}>
-                    <RoleBadge role={member.role} />
-                  </td>
-                  <td style={{ padding: "12px 20px" }}>
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                minWidth: 700,
+              }}
+              data-ocid="admin.team.table"
+            >
+              <thead>
+                <tr style={{ background: "rgba(255,255,255,0.03)" }}>
+                  {[
+                    "Name",
+                    "Login ID (Mobile)",
+                    "Role",
+                    "Access PIN",
+                    "Status",
+                    "Action",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: "10px 20px",
+                        textAlign: "left",
+                        color: "#64748b",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
                     >
-                      <span
-                        style={{
-                          color: "#94a3b8",
-                          fontSize: 14,
-                          fontFamily: "monospace",
-                          letterSpacing: "0.1em",
-                        }}
-                      >
-                        {revealedPins.has(member.mobile) ? member.pin : "••••"}
-                      </span>
-                      <button
-                        data-ocid={`admin.team.toggle.${members.indexOf(member) + 1}`}
-                        type="button"
-                        onClick={() => togglePin(member.mobile)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          color: "#64748b",
-                          padding: "2px",
-                          display: "flex",
-                          alignItems: "center",
-                        }}
-                        title={
-                          revealedPins.has(member.mobile)
-                            ? "Hide PIN"
-                            : "Reveal PIN"
-                        }
-                      >
-                        {revealedPins.has(member.mobile) ? (
-                          <EyeOff style={{ width: 14, height: 14 }} />
-                        ) : (
-                          <Eye style={{ width: 14, height: 14 }} />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                  <td style={{ padding: "12px 20px" }}>
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 6 }}
-                    >
-                      <Button
-                        data-ocid={`admin.team.reset_pin_button.${idx + 1}`}
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setResetPinTarget({
-                            mobile: member.mobile,
-                            name: member.name,
-                          });
-                          setNewPin("");
-                        }}
-                        style={{
-                          color: "#f59e0b",
-                          fontSize: 12,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                        title="Reset PIN"
-                      >
-                        <KeyRound style={{ width: 13, height: 13 }} />
-                        Reset PIN
-                      </Button>
-                      <Button
-                        data-ocid={`admin.team.delete_button.${idx + 1}`}
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveMember(member.mobile)}
-                        disabled={removing === member.mobile}
-                        style={{ color: "#f87171", fontSize: 12 }}
-                      >
-                        {removing === member.mobile ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          "Remove"
-                        )}
-                      </Button>
-                    </div>
-                  </td>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {members.map((member, idx) => (
+                  <tr
+                    key={member.mobile}
+                    data-ocid={`admin.team.row.${idx + 1}`}
+                    style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+                  >
+                    <td
+                      style={{
+                        padding: "12px 20px",
+                        color: "#f1f5f9",
+                        fontSize: 14,
+                      }}
+                    >
+                      {member.name}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 20px",
+                        color: "#94a3b8",
+                        fontSize: 14,
+                      }}
+                    >
+                      {member.mobile}
+                    </td>
+                    <td style={{ padding: "12px 20px" }}>
+                      <RoleBadge role={member.role} />
+                    </td>
+                    <td style={{ padding: "12px 20px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: 14,
+                            fontFamily: "monospace",
+                            letterSpacing: "0.1em",
+                          }}
+                        >
+                          {revealedPins.has(member.mobile)
+                            ? member.pin
+                            : "••••"}
+                        </span>
+                        <button
+                          data-ocid={`admin.team.toggle.${members.indexOf(member) + 1}`}
+                          type="button"
+                          onClick={() => togglePin(member.mobile)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#64748b",
+                            padding: "2px",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                          title={
+                            revealedPins.has(member.mobile)
+                              ? "Hide PIN"
+                              : "Reveal PIN"
+                          }
+                        >
+                          {revealedPins.has(member.mobile) ? (
+                            <EyeOff style={{ width: 14, height: 14 }} />
+                          ) : (
+                            <Eye style={{ width: 14, height: 14 }} />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                    <td style={{ padding: "12px 20px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Button
+                          data-ocid={`admin.team.reset_pin_button.${idx + 1}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setResetPinTarget({
+                              mobile: member.mobile,
+                              name: member.name,
+                            });
+                            setNewPin("");
+                          }}
+                          style={{
+                            color: "#f59e0b",
+                            fontSize: 12,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                          title="Reset PIN"
+                        >
+                          <KeyRound style={{ width: 13, height: 13 }} />
+                          Reset PIN
+                        </Button>
+                        <Button
+                          data-ocid={`admin.team.delete_button.${idx + 1}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveMember(member.mobile)}
+                          disabled={removing === member.mobile}
+                          style={{ color: "#f87171", fontSize: 12 }}
+                        >
+                          {removing === member.mobile ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            "Remove"
+                          )}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -8823,7 +9330,9 @@ export default function AdminDashboard() {
         {/* Section content */}
         <main style={{ flex: 1, overflowY: "auto" }}>
           {activeSection === "dashboard" && (
-            <DashboardSection items={catalogItems} />
+            <LiveOperationalDashboard
+              actor={actor as unknown as backendInterface}
+            />
           )}
           {activeSection === "catalog" && (
             <CatalogSection

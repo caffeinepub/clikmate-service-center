@@ -142,7 +142,7 @@ export default function DashboardModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           data-ocid="dashboard.modal"
-          className="max-w-2xl w-full rounded-2xl p-0 overflow-hidden border-0 shadow-2xl"
+          className="max-w-2xl w-full rounded-2xl p-0 overflow-y-auto border-0 shadow-2xl"
         >
           {/* Header */}
           <div className="hero-gradient px-8 pt-8 pb-6">
@@ -418,93 +418,98 @@ export default function DashboardModal({
                 </p>
               </div>
             ) : (
-              <ScrollArea className="max-h-80">
-                <Table data-ocid="dashboard.orders.table">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs font-semibold blue-text">
-                        Order ID
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold blue-text">
-                        Service
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold blue-text">
-                        Date
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold blue-text">
-                        Status
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold blue-text">
-                        Action
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold blue-text">
-                        Review
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold blue-text">
-                        Share
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map((order, i) => (
-                      <TableRow
-                        key={String(order.id)}
-                        data-ocid={`dashboard.orders.item.${i + 1}`}
-                      >
-                        <TableCell className="text-xs font-mono text-gray-500">
-                          #{String(order.id)}
-                        </TableCell>
-                        <TableCell className="text-xs font-medium">
-                          {order.serviceType}
-                        </TableCell>
-                        <TableCell className="text-xs text-gray-500">
-                          {formatDate(order.submittedAt)}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={order.status} />
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            type="button"
-                            data-ocid={`dashboard.reorder.button.${i + 1}`}
-                            onClick={onUploadClick}
-                            className="flex items-center gap-1 text-xs font-semibold blue-text hover:opacity-70 transition-opacity"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            Re-order
-                          </button>
-                        </TableCell>
-                        <TableCell>
-                          {(order.status === "Delivered" ||
-                            order.status === "Completed") &&
-                            !submittedReviews.includes(String(order.id)) && (
-                              <button
-                                type="button"
-                                data-ocid={`dashboard.review_button.${i + 1}`}
-                                onClick={() =>
-                                  setReviewModalOrder(
-                                    order as unknown as ShopOrder,
-                                  )
-                                }
-                                className="flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-800 transition-colors"
-                              >
-                                <PenLine className="w-3.5 h-3.5" />
-                                Review
-                              </button>
-                            )}
-                        </TableCell>
-                        <TableCell>
-                          <WhatsAppShareButton
-                            orderId={String(order.id)}
-                            label="Share"
-                            className="text-xs px-2 py-1 rounded-lg"
-                          />
-                        </TableCell>
+              <div className="overflow-x-auto">
+                <ScrollArea className="max-h-80">
+                  <Table
+                    data-ocid="dashboard.orders.table"
+                    className="min-w-[560px]"
+                  >
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs font-semibold blue-text whitespace-nowrap">
+                          Order ID
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold blue-text whitespace-nowrap">
+                          Service
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold blue-text whitespace-nowrap">
+                          Date
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold blue-text whitespace-nowrap">
+                          Status
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold blue-text whitespace-nowrap">
+                          Action
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold blue-text whitespace-nowrap">
+                          Review
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold blue-text whitespace-nowrap">
+                          Share
+                        </TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.map((order, i) => (
+                        <TableRow
+                          key={String(order.id)}
+                          data-ocid={`dashboard.orders.item.${i + 1}`}
+                        >
+                          <TableCell className="text-xs font-mono text-gray-500">
+                            #{String(order.id)}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium">
+                            {order.serviceType}
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500">
+                            {formatDate(order.submittedAt)}
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={order.status} />
+                          </TableCell>
+                          <TableCell>
+                            <button
+                              type="button"
+                              data-ocid={`dashboard.reorder.button.${i + 1}`}
+                              onClick={onUploadClick}
+                              className="flex items-center gap-1 text-xs font-semibold blue-text hover:opacity-70 transition-opacity whitespace-nowrap"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              Re-order
+                            </button>
+                          </TableCell>
+                          <TableCell>
+                            {(order.status === "Delivered" ||
+                              order.status === "Completed") &&
+                              !submittedReviews.includes(String(order.id)) && (
+                                <button
+                                  type="button"
+                                  data-ocid={`dashboard.review_button.${i + 1}`}
+                                  onClick={() =>
+                                    setReviewModalOrder(
+                                      order as unknown as ShopOrder,
+                                    )
+                                  }
+                                  className="flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-800 transition-colors whitespace-nowrap"
+                                >
+                                  <PenLine className="w-3.5 h-3.5" />
+                                  Review
+                                </button>
+                              )}
+                          </TableCell>
+                          <TableCell>
+                            <WhatsAppShareButton
+                              orderId={String(order.id)}
+                              label="Share"
+                              className="text-xs px-2 py-1 rounded-lg"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
             )}
           </div>
         </DialogContent>
