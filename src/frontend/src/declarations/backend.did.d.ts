@@ -10,6 +10,11 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface AttendanceRecord {
+  'status' : string,
+  'date' : string,
+  'mobile' : string,
+}
 export interface BusinessInfo {
   'hours' : string,
   'name' : string,
@@ -135,6 +140,7 @@ export interface Rider {
   'name' : string,
   'role' : string,
   'mobile' : string,
+  'baseSalary' : number,
 }
 export interface ServiceOrder {
   'files' : Array<ExternalBlob>,
@@ -164,6 +170,22 @@ export interface ShopOrderItem {
   'itemId' : bigint,
   'itemName' : string,
   'price' : number,
+}
+export interface StaffLedgerEntry {
+  'id' : bigint,
+  'entryType' : string,
+  'date' : string,
+  'description' : string,
+  'mobile' : string,
+  'amount' : number,
+}
+export interface SupportTicket {
+  'id' : bigint,
+  'resolved' : boolean,
+  'createdAt' : bigint,
+  'complaint' : string,
+  'customerMobile' : string,
+  'orderId' : string,
 }
 export interface TypesettingQuoteRequest {
   'id' : bigint,
@@ -225,6 +247,8 @@ export interface _SERVICE {
   >,
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'acceptDelivery' : ActorMethod<[bigint], undefined>,
+  'addAttendanceRecord' : ActorMethod<[string, string, string], undefined>,
   'addCatalogItem' : ActorMethod<[CatalogItemInput], bigint>,
   'addExpense' : ActorMethod<
     [string, number, string, string, string, string],
@@ -236,7 +260,14 @@ export interface _SERVICE {
     bigint
   >,
   'addRider' : ActorMethod<[string, string, string], undefined>,
-  'addTeamMember' : ActorMethod<[string, string, string, string], undefined>,
+  'addStaffLedgerEntry' : ActorMethod<
+    [string, string, string, number, string],
+    bigint
+  >,
+  'addTeamMember' : ActorMethod<
+    [string, string, string, string, number],
+    undefined
+  >,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'claimAdminWithMasterKey' : ActorMethod<[string], boolean>,
   'clearKhataDue' : ActorMethod<[string, number], number>,
@@ -252,7 +283,11 @@ export interface _SERVICE {
   'getAllCatalogItems' : ActorMethod<[], Array<CatalogItem>>,
   'getAllKhataEntries' : ActorMethod<[], Array<KhataEntry>>,
   'getAllReviews' : ActorMethod<[], Array<Review>>,
+  'getAllShopOrders' : ActorMethod<[], Array<ShopOrder>>,
+  'getAllSupportTickets' : ActorMethod<[], Array<SupportTicket>>,
   'getAllTypesettingQuotes' : ActorMethod<[], Array<TypesettingQuoteRequest>>,
+  'getAttendanceByDate' : ActorMethod<[string], Array<AttendanceRecord>>,
+  'getAttendanceForMobile' : ActorMethod<[string], Array<AttendanceRecord>>,
   'getBusinessInfo' : ActorMethod<[], BusinessInfo>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
@@ -265,6 +300,7 @@ export interface _SERVICE {
   'getInquiries' : ActorMethod<[], Array<Inquiry>>,
   'getKhataEntry' : ActorMethod<[string], [] | [KhataEntry]>,
   'getManualIncomes' : ActorMethod<[], Array<ManualIncomeEntry>>,
+  'getOrderDeliveryOtp' : ActorMethod<[bigint, string], string>,
   'getOrdersByPhone' : ActorMethod<[string], Array<OrderRecord>>,
   'getPosSales' : ActorMethod<[], Array<PosSale>>,
   'getPosSalesByPhone' : ActorMethod<[string], Array<PosSale>>,
@@ -272,6 +308,9 @@ export interface _SERVICE {
   'getPublishedReviews' : ActorMethod<[], Array<Review>>,
   'getReadyForDeliveryOrders' : ActorMethod<[], Array<MaskedShopOrder>>,
   'getRiders' : ActorMethod<[], Array<Rider>>,
+  'getStaffLedgerEntries' : ActorMethod<[string], Array<StaffLedgerEntry>>,
+  'getSupportTickets' : ActorMethod<[string], Array<SupportTicket>>,
+  'getTeamMemberActive' : ActorMethod<[string], boolean>,
   'getUpiSettings' : ActorMethod<[], [] | [UpiSettings]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getWalletBalance' : ActorMethod<[string], number>,
@@ -303,6 +342,7 @@ export interface _SERVICE {
   >,
   'removeRider' : ActorMethod<[string], undefined>,
   'resetStaffPin' : ActorMethod<[string, string], undefined>,
+  'resolveSupportTicket' : ActorMethod<[bigint], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'saveCustomerProfile' : ActorMethod<[string, string, string], undefined>,
   'seedReviews' : ActorMethod<[], undefined>,
@@ -324,12 +364,14 @@ export interface _SERVICE {
     ],
     bigint
   >,
+  'submitSupportTicket' : ActorMethod<[string, string, string], bigint>,
   'submitTypesettingQuoteRequest' : ActorMethod<
     [TypesettingQuoteRequestInput],
     bigint
   >,
   'togglePublishCatalogItem' : ActorMethod<[bigint], undefined>,
   'toggleReviewPublished' : ActorMethod<[bigint], undefined>,
+  'toggleTeamMemberActive' : ActorMethod<[string, boolean], undefined>,
   'updateCatalogItem' : ActorMethod<[bigint, CatalogItemInput], undefined>,
   'updateExpense' : ActorMethod<
     [bigint, string, number, string, string, string],
@@ -342,6 +384,8 @@ export interface _SERVICE {
     undefined
   >,
   'updateOrderStatus' : ActorMethod<[bigint, string], undefined>,
+  'updateRiderSalary' : ActorMethod<[string, number], undefined>,
+  'updateShopOrderStatus' : ActorMethod<[bigint, string], undefined>,
   'updateTypesettingQuoteStatus' : ActorMethod<
     [bigint, TypesettingQuoteUpdate],
     undefined

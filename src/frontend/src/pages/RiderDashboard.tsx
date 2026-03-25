@@ -32,7 +32,8 @@ export default function RiderDashboard() {
   const { actor, isFetching } = useActor();
   const [screen, setScreen] = useState<"login" | "dashboard">(() => {
     const s = localStorage.getItem("riderSession");
-    return s === "active" ? "dashboard" : "login";
+    const adminS = localStorage.getItem("clikmate_admin_session");
+    return s === "active" || adminS === "1" ? "dashboard" : "login";
   });
   const [mobile, setMobile] = useState("");
   const [pin, setPin] = useState("");
@@ -90,6 +91,11 @@ export default function RiderDashboard() {
   }
 
   function handleLogout() {
+    const adminS = localStorage.getItem("clikmate_admin_session");
+    if (adminS === "1") {
+      window.location.hash = "#/admin";
+      return;
+    }
     localStorage.removeItem("riderSession");
     localStorage.removeItem("riderMobile");
     setScreen("login");

@@ -8,6 +8,8 @@ import type {
   OrderRecord,
   Review,
   ShopOrder,
+  StaffLedgerEntry,
+  SupportTicket,
   TypesettingQuoteRequest,
   backendInterface,
 } from "@/backend.d";
@@ -30,6 +32,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bell,
+  BookOpen,
   Building2,
   ClipboardList,
   Edit2,
@@ -38,7 +41,9 @@ import {
   FilmIcon,
   FolderOpen,
   GripVertical,
+  Headphones,
   KeyRound,
+  Layers,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -48,8 +53,10 @@ import {
   Search,
   Settings,
   Shield,
+  ShoppingCart,
   Star,
   Trash2,
+  Truck,
   Upload,
   Users,
   Wallet,
@@ -108,7 +115,8 @@ type NavSection =
   | "wallet"
   | "reviews"
   | "b2b-leads"
-  | "audit";
+  | "audit"
+  | "helpdesk";
 
 interface MediaFile {
   id: string;
@@ -2807,20 +2815,39 @@ function OrdersSection({ actor }: { actor: backendInterface | null }) {
 function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [activeFilter, setActiveFilter] = useState<
-    "pending" | "processing" | "delivery" | "revenue" | null
+    "pending" | "processing" | "delivery" | null
   >(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [todayExpenses, setTodayExpenses] = useState<ExpenseEntry[]>([]);
+  const [todayIncomes, setTodayIncomes] = useState<ManualIncomeEntry[]>([]);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [quickExpenseForm, setQuickExpenseForm] = useState({
+    amount: "",
+    category: "Printer Ink/Paper",
+    note: "",
+    paymentMode: "Cash",
+  });
 
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const all = await (
-        actor as unknown as { getAllShopOrders: () => Promise<ShopOrder[]> }
-      ).getAllShopOrders();
+      const todayStr = new Date().toISOString().split("T")[0];
+      const [all, exp, inc] = await Promise.all([
+        (
+          actor as unknown as { getAllShopOrders: () => Promise<ShopOrder[]> }
+        ).getAllShopOrders(),
+        (actor as unknown as backendInterface).getExpenses(),
+        (actor as unknown as backendInterface).getManualIncomes(),
+      ]);
       const sorted = [...all].sort(
         (a, b) => Number(b.createdAt) - Number(a.createdAt),
       );
       setOrders(sorted);
+      setTodayExpenses(exp.filter((e: ExpenseEntry) => e.date === todayStr));
+      setTodayIncomes(
+        inc.filter((i: ManualIncomeEntry) => i.date === todayStr),
+      );
     } catch (e) {
       console.error("Failed to load orders:", e);
     } finally {
@@ -2876,13 +2903,73 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
     0,
   );
 
-  const filteredOrders = (() => {
+  const todayRevenueCash = todayIncomes
+    .filter((i) => i.paymentMode === "Cash")
+    .reduce((s, i) => s + Number(i.amount), 0);
+  const todayRevenueUpi = todayIncomes
+    .filter((i) => i.paymentMode !== "Cash")
+    .reduce((s, i) => s + Number(i.amount), 0);
+
+  const todayExpenseCash = todayExpenses
+    .filter((e) => e.paymentMode === "Cash")
+    .reduce((s, e) => s + Number(e.amount), 0);
+  const todayExpenseUpi = todayExpenses
+    .filter((e) => e.paymentMode !== "Cash")
+    .reduce((s, e) => s + Number(e.amount), 0);
+  const todayExpenseTotal = todayExpenses.reduce(
+    (s, e) => s + Number(e.amount),
+    0,
+  );
+
+  const baseFilteredOrders = (() => {
     if (activeFilter === "pending") return pendingOrders;
     if (activeFilter === "processing") return processingOrders;
     if (activeFilter === "delivery") return deliveryOrders;
-    if (activeFilter === "revenue") return todayOrders;
     return orders;
   })();
+
+  const filteredOrders = searchQuery
+    ? baseFilteredOrders.filter((o) => {
+        const q = searchQuery.trim().toLowerCase();
+        if (/^\d{10}$/.test(q)) {
+          return (o.phone ?? "").includes(q);
+        }
+        return (
+          (o.customerName ?? "").toLowerCase().includes(q) ||
+          String(o.id).includes(q)
+        );
+      })
+    : baseFilteredOrders;
+
+  const operationalCards = [
+    {
+      key: "pending" as const,
+      label: "New Orders (Pending)",
+      value: pendingOrders.length,
+      icon: "\u{1F550}",
+      color: "#f59e0b",
+      bg: "rgba(245,158,11,0.12)",
+      border: "rgba(245,158,11,0.3)",
+    },
+    {
+      key: "processing" as const,
+      label: "Ready for Print / Processing",
+      value: processingOrders.length,
+      icon: "\u{1F5A8}\uFE0F",
+      color: "#3b82f6",
+      bg: "rgba(59,130,246,0.12)",
+      border: "rgba(59,130,246,0.3)",
+    },
+    {
+      key: "delivery" as const,
+      label: "Out for Delivery / Pickup",
+      value: deliveryOrders.length,
+      icon: "\u{1F6F5}",
+      color: "#a855f7",
+      bg: "rgba(168,85,247,0.12)",
+      border: "rgba(168,85,247,0.3)",
+    },
+  ];
 
   const handleAction = async (order: ShopOrder) => {
     let newStatus = "";
@@ -2907,44 +2994,62 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
     }
   };
 
-  const metricCards = [
-    {
-      key: "pending" as const,
-      label: "New Orders (Pending)",
-      value: pendingOrders.length,
-      icon: "🕐",
-      color: "#f59e0b",
-      bg: "rgba(245,158,11,0.12)",
-      border: "rgba(245,158,11,0.3)",
-    },
-    {
-      key: "processing" as const,
-      label: "Ready for Print / Processing",
-      value: processingOrders.length,
-      icon: "🖨️",
-      color: "#3b82f6",
-      bg: "rgba(59,130,246,0.12)",
-      border: "rgba(59,130,246,0.3)",
-    },
-    {
-      key: "delivery" as const,
-      label: "Out for Delivery / Pickup",
-      value: deliveryOrders.length,
-      icon: "🛵",
-      color: "#a855f7",
-      bg: "rgba(168,85,247,0.12)",
-      border: "rgba(168,85,247,0.3)",
-    },
-    {
-      key: "revenue" as const,
-      label: "Today's Revenue",
-      value: `₹${todayRevenue.toFixed(0)}`,
-      icon: "💰",
-      color: "#10b981",
-      bg: "rgba(16,185,129,0.12)",
-      border: "rgba(16,185,129,0.3)",
-    },
-  ];
+  const handleQuickExpenseSubmit = async () => {
+    if (!quickExpenseForm.amount || Number(quickExpenseForm.amount) <= 0) {
+      toast.error("Please enter a valid amount.");
+      return;
+    }
+    try {
+      const todayStr = new Date().toISOString().split("T")[0];
+      await (actor as unknown as backendInterface).addExpense(
+        quickExpenseForm.category,
+        Number(quickExpenseForm.amount),
+        todayStr,
+        quickExpenseForm.paymentMode,
+        quickExpenseForm.note,
+        "admin",
+      );
+      toast.success("Expense added!");
+      setShowExpenseModal(false);
+      setQuickExpenseForm({
+        amount: "",
+        category: "Printer Ink/Paper",
+        note: "",
+        paymentMode: "Cash",
+      });
+      await loadOrders();
+    } catch (e) {
+      console.error("addExpense error:", e);
+      toast.error("Failed to add expense.");
+    }
+  };
+
+  const pillBtn = (
+    label: string,
+    bg: string,
+    onClick: () => void,
+    ocid: string,
+  ) => (
+    <button
+      type="button"
+      data-ocid={ocid}
+      onClick={onClick}
+      style={{
+        borderRadius: 999,
+        border: "none",
+        background: bg,
+        color: "white",
+        padding: "9px 20px",
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+      }}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div style={{ padding: 24 }}>
@@ -2993,7 +3098,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
             boxShadow: "0 4px 14px rgba(124,58,237,0.35)",
           }}
         >
-          🖨️ Print Report (A4)
+          Print Report (A4)
         </button>
       </div>
 
@@ -3001,7 +3106,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
         {/* Print-only header */}
         <div id="print-report-header" style={{ display: "none" }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
-            ClikMate — Daily Operations Report
+            ClikMate Daily Operations Report
           </h1>
           <p style={{ fontSize: 13, color: "#555" }}>
             {new Date().toLocaleDateString("en-IN", {
@@ -3014,16 +3119,337 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
           <hr style={{ margin: "8px 0 16px" }} />
         </div>
 
-        {/* Metric Cards */}
+        {/* Smart Search Bar */}
+        <div
+          className="no-print"
+          style={{
+            position: "relative",
+            marginBottom: 20,
+          }}
+        >
+          <span
+            style={{
+              position: "absolute",
+              left: 18,
+              top: "50%",
+              transform: "translateY(-50%)",
+              fontSize: 18,
+              pointerEvents: "none",
+            }}
+          >
+            &#128269;
+          </span>
+          <input
+            data-ocid="dashboard.search_input"
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by Customer Name, Mobile Number, or Order ID..."
+            style={{
+              width: "100%",
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 14,
+              padding: "14px 20px 14px 52px",
+              color: "white",
+              fontSize: 15,
+              outline: "none",
+              boxSizing: "border-box",
+              transition: "border-color 0.2s",
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = "rgba(99,102,241,0.6)";
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+            }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              style={{
+                position: "absolute",
+                right: 14,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.1)",
+                border: "none",
+                borderRadius: 6,
+                color: "rgba(255,255,255,0.6)",
+                padding: "2px 8px",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              x
+            </button>
+          )}
+        </div>
+
+        {/* Hero Financial Cards */}
+        <div
+          className="no-print"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 20,
+            marginBottom: 20,
+          }}
+        >
+          {/* Today's Revenue */}
+          <div
+            style={{
+              background:
+                "linear-gradient(135deg, #0f2447 0%, #1e3a5f 50%, #0a1628 100%)",
+              border: "1px solid rgba(59,130,246,0.3)",
+              borderRadius: 16,
+              padding: "24px 28px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 8,
+              }}
+            >
+              <span style={{ fontSize: 22 }}>&#128176;</span>
+              <span
+                style={{
+                  color: "rgba(255,255,255,0.55)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Today's Revenue
+              </span>
+            </div>
+            <div
+              style={{
+                color: "white",
+                fontSize: 36,
+                fontWeight: 800,
+                lineHeight: 1,
+                marginBottom: 14,
+              }}
+            >
+              &#8377;{todayRevenue.toFixed(0)}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                marginBottom: 14,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#22c55e",
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                  Cash: &#8377;{todayRevenueCash.toFixed(0)}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#3b82f6",
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                  UPI/Online: &#8377;{todayRevenueUpi.toFixed(0)}
+                </span>
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: "rgba(255,255,255,0.3)",
+                fontWeight: 500,
+              }}
+            >
+              Live &middot; Updates in real-time
+            </div>
+          </div>
+
+          {/* Today's Expenses */}
+          <div
+            style={{
+              background:
+                "linear-gradient(135deg, #2d0a0a 0%, #4a1010 50%, #1a0505 100%)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: 16,
+              padding: "24px 28px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 8,
+              }}
+            >
+              <span style={{ fontSize: 22 }}>&#128202;</span>
+              <span
+                style={{
+                  color: "rgba(255,255,255,0.55)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Today's Expenses
+              </span>
+            </div>
+            <div
+              style={{
+                color: "#fca5a5",
+                fontSize: 36,
+                fontWeight: 800,
+                lineHeight: 1,
+                marginBottom: 14,
+              }}
+            >
+              &#8377;{todayExpenseTotal.toFixed(0)}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                marginBottom: 14,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#22c55e",
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                  Cash: &#8377;{todayExpenseCash.toFixed(0)}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#3b82f6",
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                  UPI: &#8377;{todayExpenseUpi.toFixed(0)}
+                </span>
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: "rgba(255,255,255,0.3)",
+                fontWeight: 500,
+              }}
+            >
+              {todayExpenses.length} entries today
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions Ribbon */}
+        <div
+          className="no-print"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 10,
+            marginBottom: 20,
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 14,
+            padding: "16px 20px",
+          }}
+        >
+          <span
+            style={{
+              color: "rgba(255,255,255,0.7)",
+              fontSize: 13,
+              fontWeight: 700,
+              marginRight: 10,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Quick Actions
+          </span>
+          {pillBtn(
+            "+ New POS Order",
+            "linear-gradient(135deg, #10b981, #059669)",
+            () => {
+              window.location.hash = "/pos";
+            },
+            "dashboard.pos_button",
+          )}
+          {pillBtn(
+            "+ Add Manual Expense",
+            "linear-gradient(135deg, #ef4444, #dc2626)",
+            () => setShowExpenseModal(true),
+            "dashboard.expense_button",
+          )}
+          {pillBtn(
+            "Create B2B Quote",
+            "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+            () => {
+              window.location.hash = "/bulk-dashboard";
+            },
+            "dashboard.b2b_button",
+          )}
+          {pillBtn(
+            "Inventory / Stock",
+            "linear-gradient(135deg, #f59e0b, #d97706)",
+            () => {
+              window.location.hash = "/admin";
+              setTimeout(
+                () => window.dispatchEvent(new CustomEvent("catalogTab")),
+                100,
+              );
+            },
+            "dashboard.inventory_button",
+          )}
+        </div>
+
+        {/* Operational Status Cards */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
+            gridTemplateColumns: "repeat(3, 1fr)",
             gap: 14,
             marginBottom: 24,
           }}
         >
-          {metricCards.map((card) => {
+          {operationalCards.map((card) => {
             const isActive = activeFilter === card.key;
             return (
               <button
@@ -3078,7 +3504,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                       fontWeight: 600,
                     }}
                   >
-                    ● Filtered
+                    Filtered
                   </div>
                 )}
               </button>
@@ -3099,7 +3525,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
             <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
               Showing:{" "}
               <strong style={{ color: "white" }}>
-                {metricCards.find((c) => c.key === activeFilter)?.label}
+                {operationalCards.find((c) => c.key === activeFilter)?.label}
               </strong>
             </span>
             <button
@@ -3115,7 +3541,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                 cursor: "pointer",
               }}
             >
-              Clear ×
+              Clear
             </button>
           </div>
         )}
@@ -3147,8 +3573,10 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
               }}
             >
               {activeFilter
-                ? metricCards.find((c) => c.key === activeFilter)?.label
-                : "All Orders"}
+                ? operationalCards.find((c) => c.key === activeFilter)?.label
+                : searchQuery
+                  ? `Search results for "${searchQuery}"`
+                  : "All Orders"}
               <span
                 style={{
                   marginLeft: 8,
@@ -3174,7 +3602,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
               }}
               className="no-print"
             >
-              ↻ Refresh
+              Refresh
             </button>
           </div>
           <div style={{ overflowX: "auto" }}>
@@ -3239,7 +3667,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                       (order.items[0] as { itemName?: string } | undefined)
                         ?.itemName ??
                       order.deliveryMethod ??
-                      "—";
+                      "-";
                     return (
                       <tr
                         key={String(order.id)}
@@ -3268,7 +3696,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {order.customerName || "—"}
+                          {order.customerName || "-"}
                         </td>
                         <td
                           style={{
@@ -3292,7 +3720,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          ₹{Number(order.totalAmount).toFixed(0)}
+                          &#8377;{Number(order.totalAmount).toFixed(0)}
                         </td>
                         <td
                           style={{ padding: "12px 16px", whiteSpace: "nowrap" }}
@@ -3319,7 +3747,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                                 cursor: "pointer",
                               }}
                             >
-                              ✓ Accept
+                              Accept
                             </button>
                           )}
                           {order.status === "Processing/Printing" && (
@@ -3338,7 +3766,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                                 cursor: "pointer",
                               }}
                             >
-                              🖨 Mark Ready
+                              Mark Ready
                             </button>
                           )}
                           {order.status === "Ready for Pickup" && (
@@ -3357,7 +3785,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                                 cursor: "pointer",
                               }}
                             >
-                              📦 Out for Delivery
+                              Out for Delivery
                             </button>
                           )}
                           {order.status === "Ready for Delivery" && (
@@ -3376,7 +3804,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                                 cursor: "pointer",
                               }}
                             >
-                              🛵 Dispatch
+                              Dispatch
                             </button>
                           )}
                           {order.status === "Out for Delivery" && (
@@ -3386,7 +3814,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                                 fontSize: 12,
                               }}
                             >
-                              Awaiting OTP
+                              In transit
                             </span>
                           )}
                           {(order.status === "Completed" ||
@@ -3397,7 +3825,7 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
                                 fontSize: 12,
                               }}
                             >
-                              —
+                              -
                             </span>
                           )}
                         </td>
@@ -3410,6 +3838,275 @@ function LiveOperationalDashboard({ actor }: { actor: backendInterface }) {
           </div>
         </div>
       </div>
+
+      {/* Quick Expense Modal */}
+      {showExpenseModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.7)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => setShowExpenseModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowExpenseModal(false);
+          }}
+          role="presentation"
+        >
+          <div
+            data-ocid="dashboard.expense_modal"
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 16,
+              padding: 28,
+              width: 400,
+              maxWidth: "90vw",
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 20,
+              }}
+            >
+              <h3
+                style={{
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: 17,
+                  margin: 0,
+                }}
+              >
+                Add Manual Expense
+              </h3>
+              <button
+                type="button"
+                data-ocid="dashboard.expense_modal.close_button"
+                onClick={() => setShowExpenseModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "rgba(255,255,255,0.4)",
+                  fontSize: 20,
+                  cursor: "pointer",
+                }}
+              >
+                x
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label
+                  htmlFor="qexp-amount"
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  AMOUNT
+                </label>
+                <input
+                  id="qexp-amount"
+                  data-ocid="dashboard.expense_modal.input"
+                  type="number"
+                  min="0"
+                  value={quickExpenseForm.amount}
+                  onChange={(e) =>
+                    setQuickExpenseForm((p) => ({
+                      ...p,
+                      amount: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g. 500"
+                  style={{
+                    width: "100%",
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    color: "white",
+                    fontSize: 15,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="qexp-category"
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  CATEGORY
+                </label>
+                <select
+                  id="qexp-category"
+                  data-ocid="dashboard.expense_modal.select"
+                  value={quickExpenseForm.category}
+                  onChange={(e) =>
+                    setQuickExpenseForm((p) => ({
+                      ...p,
+                      category: e.target.value,
+                    }))
+                  }
+                  style={{
+                    width: "100%",
+                    background: "#1e293b",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    color: "white",
+                    fontSize: 14,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  {[
+                    "Printer Ink/Paper",
+                    "Shop Rent",
+                    "Electricity/Internet",
+                    "Salary/Rider Payout",
+                    "Staff Salary & Payroll",
+                    "Tea/Snacks",
+                    "Misc",
+                  ].map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="qexp-paymode"
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  PAYMENT MODE
+                </label>
+                <select
+                  id="qexp-paymode"
+                  value={quickExpenseForm.paymentMode}
+                  onChange={(e) =>
+                    setQuickExpenseForm((p) => ({
+                      ...p,
+                      paymentMode: e.target.value,
+                    }))
+                  }
+                  style={{
+                    width: "100%",
+                    background: "#1e293b",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    color: "white",
+                    fontSize: 14,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="qexp-note"
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  NOTE (optional)
+                </label>
+                <input
+                  id="qexp-note"
+                  data-ocid="dashboard.expense_modal.textarea"
+                  type="text"
+                  value={quickExpenseForm.note}
+                  onChange={(e) =>
+                    setQuickExpenseForm((p) => ({ ...p, note: e.target.value }))
+                  }
+                  placeholder="Short description..."
+                  style={{
+                    width: "100%",
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    color: "white",
+                    fontSize: 14,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                <button
+                  type="button"
+                  data-ocid="dashboard.expense_modal.cancel_button"
+                  onClick={() => setShowExpenseModal(false)}
+                  style={{
+                    flex: 1,
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 8,
+                    color: "rgba(255,255,255,0.6)",
+                    padding: "10px",
+                    fontSize: 14,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  data-ocid="dashboard.expense_modal.submit_button"
+                  onClick={handleQuickExpenseSubmit}
+                  style={{
+                    flex: 2,
+                    background: "linear-gradient(135deg, #ef4444, #dc2626)",
+                    border: "none",
+                    borderRadius: 8,
+                    color: "white",
+                    padding: "10px",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Save Expense
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5484,65 +6181,553 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-// ─── Team & Access Section ────────────────────────────────────────────────────
+function DailyAttendanceTab({
+  members,
+  actor,
+  onAttendanceSaved,
+}: {
+  members: Array<{
+    name: string;
+    mobile: string;
+    pin: string;
+    role: string;
+    baseSalary: number;
+  }>;
+  actor: backendInterface | null;
+  onAttendanceSaved?: () => void;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [attendance, setAttendance] = useState<
+    Record<string, "Present" | "Absent" | "Half-Day">
+  >({});
+  const [saving, setSaving] = useState(false);
 
-const ROLE_CONFIG: Record<
-  string,
-  { label: string; color: string; bg: string }
-> = {
-  "Shop Staff": {
-    label: "Shop Staff",
-    color: "#60a5fa",
-    bg: "rgba(96,165,250,0.15)",
-  },
-  "Bulk Printing Staff": {
-    label: "Bulk Printing",
-    color: "#c084fc",
-    bg: "rgba(192,132,252,0.15)",
-  },
-  Rider: { label: "Rider", color: "#fb923c", bg: "rgba(251,146,60,0.15)" },
-  // Legacy role name mappings
-  Staff: { label: "Shop Staff", color: "#60a5fa", bg: "rgba(96,165,250,0.15)" },
-  "Delivery Rider": {
-    label: "Rider",
-    color: "#fb923c",
-    bg: "rgba(251,146,60,0.15)",
-  },
-};
+  // Initialize all members as Present when members or date changes
+  useEffect(() => {
+    const saved = localStorage.getItem(`attendance_${selectedDate}`);
+    if (saved) {
+      try {
+        setAttendance(JSON.parse(saved));
+        return;
+      } catch {}
+    }
+    const init: Record<string, "Present" | "Absent" | "Half-Day"> = {};
+    for (const m of members) {
+      init[m.mobile] = "Present";
+    }
+    setAttendance(init);
+  }, [members, selectedDate]);
 
-function RoleBadge({ role }: { role: string }) {
-  const cfg = ROLE_CONFIG[role] ?? {
-    label: role,
-    color: "#94a3b8",
-    bg: "rgba(148,163,184,0.15)",
-  };
+  function setStatus(
+    mobile: string,
+    status: "Present" | "Absent" | "Half-Day",
+  ) {
+    setAttendance((prev) => ({ ...prev, [mobile]: status }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      localStorage.setItem(
+        `attendance_${selectedDate}`,
+        JSON.stringify(attendance),
+      );
+      // Also persist to backend
+      if (actor) {
+        const tasks: Promise<unknown>[] = [];
+        for (const m of members) {
+          const status = attendance[m.mobile] || "Present";
+          tasks.push(
+            (actor as unknown as backendInterface).addAttendanceRecord(
+              m.mobile,
+              selectedDate,
+              status,
+            ),
+          );
+          const dailyWage = (m.baseSalary || 0) / 30;
+          if (status === "Present" && dailyWage > 0) {
+            tasks.push(
+              (actor as unknown as backendInterface).addStaffLedgerEntry(
+                m.mobile,
+                selectedDate,
+                "Attendance Earned",
+                dailyWage,
+                "earned",
+              ),
+            );
+          } else if (status === "Half-Day" && dailyWage > 0) {
+            tasks.push(
+              (actor as unknown as backendInterface).addStaffLedgerEntry(
+                m.mobile,
+                selectedDate,
+                "Attendance Earned (Half Day)",
+                dailyWage * 0.5,
+                "earned",
+              ),
+            );
+          }
+        }
+        await Promise.allSettled(tasks);
+        if (onAttendanceSaved) onAttendanceSaved();
+      }
+      toast.success(`Attendance for ${selectedDate} saved successfully!`);
+    } catch {
+      toast.error("Failed to save attendance.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const statusOptions: Array<"Present" | "Absent" | "Half-Day"> = [
+    "Present",
+    "Absent",
+    "Half-Day",
+  ];
+
   return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 20,
-        fontSize: 12,
-        fontWeight: 600,
-        color: cfg.color,
-        background: cfg.bg,
-        border: `1px solid ${cfg.color}30`,
-      }}
-    >
-      {cfg.label}
-    </span>
+    <div style={{ maxWidth: 860 }}>
+      <h2
+        style={{
+          color: "#f1f5f9",
+          fontSize: 22,
+          fontWeight: 700,
+          marginBottom: 6,
+        }}
+      >
+        Daily Attendance
+      </h2>
+      <p style={{ color: "#94a3b8", fontSize: 14, marginBottom: 24 }}>
+        Mark attendance for all active staff members.
+      </p>
+
+      {/* Date Picker */}
+      <div
+        style={{
+          background: "#1e293b",
+          borderRadius: 12,
+          padding: "16px 20px",
+          marginBottom: 20,
+          border: "1px solid rgba(255,255,255,0.07)",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <label
+          htmlFor="attendance-date"
+          style={{ color: "#94a3b8", fontSize: 14, fontWeight: 500 }}
+        >
+          Select Date:
+        </label>
+        <input
+          id="attendance-date"
+          data-ocid="attendance.date.input"
+          type="date"
+          value={selectedDate}
+          max={today}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          style={{
+            background: "#0f172a",
+            color: "#f1f5f9",
+            border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 8,
+            padding: "8px 12px",
+            fontSize: 14,
+            colorScheme: "dark",
+          }}
+        />
+        {selectedDate === today && (
+          <span
+            style={{
+              background: "rgba(251,191,36,0.15)",
+              color: "#fbbf24",
+              borderRadius: 20,
+              padding: "3px 12px",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Today
+          </span>
+        )}
+      </div>
+
+      {/* Attendance Table */}
+      {members.length === 0 ? (
+        <div
+          data-ocid="attendance.empty_state"
+          style={{
+            background: "#1e293b",
+            borderRadius: 12,
+            padding: 40,
+            textAlign: "center",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <p style={{ color: "#64748b", fontSize: 15 }}>
+            No active staff members found. Add team members in the Team &amp;
+            Access tab first.
+          </p>
+        </div>
+      ) : (
+        <div
+          style={{
+            background: "#1e293b",
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.07)",
+            overflow: "hidden",
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "rgba(15,23,42,0.6)" }}>
+                  <th
+                    style={{
+                      padding: "12px 16px",
+                      textAlign: "left",
+                      color: "#64748b",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    #
+                  </th>
+                  <th
+                    style={{
+                      padding: "12px 16px",
+                      textAlign: "left",
+                      color: "#64748b",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    Staff Name
+                  </th>
+                  <th
+                    style={{
+                      padding: "12px 16px",
+                      textAlign: "left",
+                      color: "#64748b",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    Mobile
+                  </th>
+                  <th
+                    style={{
+                      padding: "12px 16px",
+                      textAlign: "left",
+                      color: "#64748b",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    Attendance
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member, idx) => (
+                  <tr
+                    key={member.mobile}
+                    data-ocid={`attendance.item.${idx + 1}`}
+                    style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+                  >
+                    <td
+                      style={{
+                        padding: "14px 16px",
+                        color: "#64748b",
+                        fontSize: 14,
+                      }}
+                    >
+                      {idx + 1}
+                    </td>
+                    <td style={{ padding: "14px 16px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: "50%",
+                            background:
+                              "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span
+                          style={{
+                            color: "#f1f5f9",
+                            fontSize: 14,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {member.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td
+                      style={{
+                        padding: "14px 16px",
+                        color: "#94a3b8",
+                        fontSize: 14,
+                      }}
+                    >
+                      {member.mobile}
+                    </td>
+                    <td style={{ padding: "14px 16px" }}>
+                      <div
+                        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+                      >
+                        {statusOptions.map((option) => {
+                          const current =
+                            attendance[member.mobile] || "Present";
+                          const isSelected = current === option;
+                          const colorMap: Record<
+                            string,
+                            { bg: string; text: string; border: string }
+                          > = {
+                            Present: {
+                              bg: isSelected
+                                ? "rgba(34,197,94,0.2)"
+                                : "transparent",
+                              text: isSelected ? "#22c55e" : "#64748b",
+                              border: isSelected
+                                ? "#22c55e"
+                                : "rgba(255,255,255,0.1)",
+                            },
+                            Absent: {
+                              bg: isSelected
+                                ? "rgba(239,68,68,0.2)"
+                                : "transparent",
+                              text: isSelected ? "#ef4444" : "#64748b",
+                              border: isSelected
+                                ? "#ef4444"
+                                : "rgba(255,255,255,0.1)",
+                            },
+                            "Half-Day": {
+                              bg: isSelected
+                                ? "rgba(251,191,36,0.2)"
+                                : "transparent",
+                              text: isSelected ? "#fbbf24" : "#64748b",
+                              border: isSelected
+                                ? "#fbbf24"
+                                : "rgba(255,255,255,0.1)",
+                            },
+                          };
+                          const c = colorMap[option];
+                          return (
+                            <label
+                              key={option}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                cursor: "pointer",
+                                background: c.bg,
+                                border: `1px solid ${c.border}`,
+                                borderRadius: 20,
+                                padding: "5px 12px",
+                                transition: "all 0.15s",
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name={`attendance_${member.mobile}`}
+                                value={option}
+                                checked={isSelected}
+                                onChange={() =>
+                                  setStatus(member.mobile, option)
+                                }
+                                style={{ display: "none" }}
+                              />
+                              <span
+                                style={{
+                                  color: c.text,
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? 600 : 400,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {option === "Present"
+                                  ? "✓ Present"
+                                  : option === "Absent"
+                                    ? "✗ Absent"
+                                    : "½ Half-Day"}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Summary cards */}
+      {members.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            marginBottom: 20,
+            flexWrap: "wrap",
+          }}
+        >
+          {(["Present", "Absent", "Half-Day"] as const).map((s) => {
+            const count = Object.values(attendance).filter(
+              (v) => v === s,
+            ).length;
+            const cfg = {
+              Present: { color: "#22c55e", bg: "rgba(34,197,94,0.1)" },
+              Absent: { color: "#ef4444", bg: "rgba(239,68,68,0.1)" },
+              "Half-Day": { color: "#fbbf24", bg: "rgba(251,191,36,0.1)" },
+            }[s];
+            return (
+              <div
+                key={s}
+                style={{
+                  background: cfg.bg,
+                  border: `1px solid ${cfg.color}33`,
+                  borderRadius: 10,
+                  padding: "10px 18px",
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  style={{ color: cfg.color, fontWeight: 700, fontSize: 20 }}
+                >
+                  {count}
+                </span>
+                <span style={{ color: cfg.color, fontSize: 13 }}>{s}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Save Button */}
+      <button
+        type="button"
+        data-ocid="attendance.submit_button"
+        onClick={handleSave}
+        disabled={saving || members.length === 0}
+        style={{
+          background: saving
+            ? "#374151"
+            : "linear-gradient(135deg, #3b82f6, #6366f1)",
+          color: "#fff",
+          border: "none",
+          borderRadius: 10,
+          padding: "13px 32px",
+          fontSize: 15,
+          fontWeight: 600,
+          cursor: saving ? "not-allowed" : "pointer",
+          opacity: members.length === 0 ? 0.5 : 1,
+          width: "100%",
+        }}
+      >
+        {saving ? "Saving..." : `💾 Save Today's Attendance (${selectedDate})`}
+      </button>
+    </div>
   );
 }
 
+// ─── Team & Access Section ────────────────────────────────────────────────────
+
+// RoleBadge replaced by inline access chips
+
 function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
   const [members, setMembers] = useState<
-    Array<{ name: string; mobile: string; pin: string; role: string }>
+    Array<{
+      name: string;
+      mobile: string;
+      pin: string;
+      role: string;
+      baseSalary: number;
+    }>
   >([]);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [pin, setPin] = useState("");
-  const [role, setRole] = useState("Shop Staff");
+  const [accesses, setAccesses] = useState<string[]>(["POS Access"]);
+  const ACCESS_OPTIONS = [
+    {
+      key: "POS Access",
+      label: "POS Access",
+      desc: "Counter billing & retail orders",
+      color: "#60a5fa",
+      bg: "rgba(96,165,250,0.15)",
+    },
+    {
+      key: "Rider Access",
+      label: "Rider Access",
+      desc: "Delivery dashboard",
+      color: "#fb923c",
+      bg: "rgba(251,146,60,0.15)",
+    },
+    {
+      key: "Bulk Printing Access",
+      label: "Bulk Printing Access",
+      desc: "B2B VIP portal",
+      color: "#c084fc",
+      bg: "rgba(192,132,252,0.15)",
+    },
+    {
+      key: "Daily Audit View",
+      label: "Daily Audit View",
+      desc: "View today's cash drawer only",
+      color: "#34d399",
+      bg: "rgba(52,211,153,0.15)",
+    },
+  ];
+  const [baseSalary, setBaseSalary] = useState("");
+  const [salaryDueMap, setSalaryDueMap] = useState<Record<string, number>>({});
+  const [staffLedgerMap, setStaffLedgerMap] = useState<
+    Record<string, StaffLedgerEntry[]>
+  >({});
+  const [staffLedgerModal, setStaffLedgerModal] = useState<{
+    member: {
+      name: string;
+      mobile: string;
+      pin: string;
+      role: string;
+      baseSalary: number;
+    };
+  } | null>(null);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [revealedPins, setRevealedPins] = useState<Set<string>>(new Set());
@@ -5552,6 +6737,10 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
   } | null>(null);
   const [newPin, setNewPin] = useState("");
   const [savingPin, setSavingPin] = useState(false);
+  const [salaryInputs, setSalaryInputs] = useState<Record<string, string>>({});
+  const [activeSubTab, setActiveSubTab] = useState<"team" | "attendance">(
+    "team",
+  );
 
   function togglePin(mobile: string) {
     setRevealedPins((prev) => {
@@ -5576,10 +6765,86 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
     }
   }
 
+  async function loadStaffLedgers(
+    memberList: Array<{ mobile: string; baseSalary: number }>,
+  ) {
+    if (!actor) return;
+    try {
+      const results = await Promise.all(
+        memberList.map((m) =>
+          (actor as unknown as backendInterface).getStaffLedgerEntries(
+            m.mobile,
+          ),
+        ),
+      );
+      const newMap: Record<string, StaffLedgerEntry[]> = {};
+      for (let i = 0; i < memberList.length; i++) {
+        newMap[memberList[i].mobile] = results[i] || [];
+      }
+      setStaffLedgerMap(newMap);
+    } catch (err) {
+      console.error("loadStaffLedgers error:", err);
+    }
+  }
+
+  function computeSalaryDue(
+    memberList: Array<{ mobile: string; baseSalary: number }>,
+    ledgerMap: Record<string, StaffLedgerEntry[]>,
+  ) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const daysInMonth = new Date(year, now.getMonth() + 1, 0).getDate();
+
+    const newDueMap: Record<string, number> = {};
+    for (const m of memberList) {
+      let presentDays = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${year}-${month}-${String(d).padStart(2, "0")}`;
+        const saved = localStorage.getItem(`attendance_${dateStr}`);
+        if (saved) {
+          try {
+            const att = JSON.parse(saved) as Record<string, string>;
+            if (att[m.mobile] === "Present") presentDays += 1;
+            else if (att[m.mobile] === "Half-Day") presentDays += 0.5;
+          } catch {}
+        }
+      }
+      const dailyWage = (m.baseSalary || 0) / 30;
+      const totalEarned = dailyWage * presentDays;
+      const entries = ledgerMap[m.mobile] || [];
+      const totalPaid = entries
+        .filter(
+          (e) =>
+            e.entryType === "paid" && e.date.startsWith(`${year}-${month}`),
+        )
+        .reduce((sum, e) => sum + e.amount, 0);
+      newDueMap[m.mobile] = Math.max(0, totalEarned - totalPaid);
+    }
+    setSalaryDueMap(newDueMap);
+  }
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadMembers is stable
   useEffect(() => {
     loadMembers();
   }, [actor]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stable ref
+  useEffect(() => {
+    if (members.length > 0) {
+      loadStaffLedgers(members).then(() => {
+        computeSalaryDue(members, staffLedgerMap);
+      });
+    }
+  }, [members]);
+
+  // Recompute salary due when ledger map updates
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stable ref
+  useEffect(() => {
+    if (members.length > 0) {
+      computeSalaryDue(members, staffLedgerMap);
+    }
+  }, [staffLedgerMap]);
 
   async function handleAddMember() {
     if (!actor) {
@@ -5600,7 +6865,13 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
     }
 
     // 1. Optimistic update — instantly add to table
-    const optimistic = { name: name.trim(), mobile, pin, role };
+    const optimistic = {
+      name: name.trim(),
+      mobile,
+      pin,
+      role: accesses.join(", "),
+      baseSalary: Number(baseSalary) || 0,
+    };
     setMembers((prev) => [optimistic, ...prev]);
 
     // 2. Clear form immediately + success toast
@@ -5608,7 +6879,8 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
     setName("");
     setMobile("");
     setPin("");
-    setRole("Shop Staff");
+    setAccesses(["POS Access"]);
+    setBaseSalary("");
     toast.success(`Team member "${savedName}" added successfully.`);
 
     // 3. Background backend sync
@@ -5619,6 +6891,7 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
         optimistic.mobile,
         optimistic.pin,
         optimistic.role,
+        Number(baseSalary) || 0,
       )
       .then(() => {
         // Confirm from backend after optimistic update
@@ -5677,571 +6950,1270 @@ function TeamAccessSection({ actor }: { actor: backendInterface | null }) {
     }
   }
 
+  async function handleToggleActive(memberMobile: string, isActive: boolean) {
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.mobile === memberMobile ? { ...m, active: isActive } : m,
+      ),
+    );
+    try {
+      await (actor as unknown as backendInterface).toggleTeamMemberActive(
+        memberMobile,
+        isActive,
+      );
+      toast.success(isActive ? "Member activated." : "Member deactivated.");
+    } catch {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.mobile === memberMobile ? { ...m, active: !isActive } : m,
+        ),
+      );
+      toast.error("Failed to update status.");
+    }
+  }
+
+  async function handlePaySalary(member: {
+    name: string;
+    mobile: string;
+    baseSalary: number;
+  }) {
+    const amount = Number.parseFloat(salaryInputs[member.mobile] || "0");
+    if (!amount || amount <= 0) {
+      toast.error("Please enter a valid salary amount.");
+      return;
+    }
+    if (!actor) {
+      toast.error("Connection error.");
+      return;
+    }
+    const today = new Date().toISOString().split("T")[0];
+    try {
+      await (actor as unknown as backendInterface).addExpense(
+        "Staff Salary & Payroll",
+        amount,
+        today,
+        "Cash",
+        `Salary paid to ${member.name} (${member.mobile})`,
+        "admin",
+      );
+      await (actor as unknown as backendInterface).addStaffLedgerEntry(
+        member.mobile,
+        today,
+        "Salary Paid",
+        amount,
+        "paid",
+      );
+      // Refresh ledger for this member
+      const entries = await (
+        actor as unknown as backendInterface
+      ).getStaffLedgerEntries(member.mobile);
+      setStaffLedgerMap((prev) => ({ ...prev, [member.mobile]: entries }));
+      setSalaryInputs((prev) => ({ ...prev, [member.mobile]: "" }));
+      toast.success(`Salary paid to ${member.name} & recorded in Audit.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to record salary: ${msg}`);
+    }
+  }
+
   return (
-    <div style={{ padding: "24px", maxWidth: 760 }}>
-      <h2
-        style={{
-          color: "#f1f5f9",
-          fontSize: 22,
-          fontWeight: 700,
-          marginBottom: 6,
-        }}
-      >
-        Team & Access
-      </h2>
-      <p style={{ color: "#94a3b8", fontSize: 14, marginBottom: 24 }}>
-        Manage all staff, riders, and printing team members. Each role has a
-        dedicated login portal.
-      </p>
-
-      {/* Add Team Member Form */}
+    <div style={{ padding: "24px", maxWidth: 900 }}>
+      {/* Sub-tab switcher */}
       <div
         style={{
-          background: "#1e293b",
-          borderRadius: 12,
-          padding: 20,
+          display: "flex",
+          gap: 8,
           marginBottom: 24,
-          border: "1px solid rgba(255,255,255,0.07)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          paddingBottom: 16,
         }}
       >
-        <h3
-          style={{
-            color: "#f59e0b",
-            fontSize: 15,
-            fontWeight: 600,
-            marginBottom: 16,
-          }}
-        >
-          Add New Team Member
-        </h3>
-        <div
-          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
-        >
-          <div>
-            <Label
-              style={{
-                color: "#cbd5e1",
-                fontSize: 12,
-                marginBottom: 6,
-                display: "block",
-              }}
-            >
-              Full Name
-            </Label>
-            <Input
-              data-ocid="admin.team.name.input"
-              placeholder="Employee name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={{
-                background: "#0f172a",
-                border: "1px solid #334155",
-                color: "#f1f5f9",
-              }}
-            />
-          </div>
-          <div>
-            <Label
-              style={{
-                color: "#cbd5e1",
-                fontSize: 12,
-                marginBottom: 6,
-                display: "block",
-              }}
-            >
-              Mobile Number (Login ID)
-            </Label>
-            <Input
-              data-ocid="admin.team.mobile.input"
-              placeholder="10-digit mobile"
-              maxLength={10}
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
-              style={{
-                background: "#0f172a",
-                border: "1px solid #334155",
-                color: "#f1f5f9",
-              }}
-            />
-          </div>
-          <div>
-            <Label
-              style={{
-                color: "#cbd5e1",
-                fontSize: 12,
-                marginBottom: 6,
-                display: "block",
-              }}
-            >
-              4-Digit Login PIN
-            </Label>
-            <Input
-              data-ocid="admin.team.pin.input"
-              type="password"
-              placeholder="PIN"
-              maxLength={4}
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-              style={{
-                background: "#0f172a",
-                border: "1px solid #334155",
-                color: "#f1f5f9",
-              }}
-            />
-          </div>
-          <div>
-            <Label
-              style={{
-                color: "#cbd5e1",
-                fontSize: 12,
-                marginBottom: 6,
-                display: "block",
-              }}
-            >
-              Role
-            </Label>
-            <select
-              data-ocid="admin.team.role.select"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                borderRadius: 8,
-                background: "#0f172a",
-                border: "1px solid #334155",
-                color: "#f1f5f9",
-                fontSize: 14,
-              }}
-            >
-              <option value="Shop Staff">Shop Staff (POS & Counter)</option>
-              <option value="Bulk Printing Staff">
-                Bulk Printing Staff (B2B Orders)
-              </option>
-              <option value="Rider">Rider (Delivery Operations)</option>
-            </select>
-          </div>
-        </div>
-        <Button
-          data-ocid="admin.team.add.primary_button"
-          onClick={handleAddMember}
-          disabled={adding}
-          style={{
-            marginTop: 16,
-            background: "#f59e0b",
-            color: "#0f172a",
-            fontWeight: 700,
-            border: 0,
-          }}
-        >
-          {adding ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Adding...
-            </>
-          ) : (
-            <>
-              <Users className="w-4 h-4 mr-2" />
-              Add Team Member
-            </>
-          )}
-        </Button>
+        {[
+          { key: "team", label: "👥 Team & Access" },
+          { key: "attendance", label: "🗓️ Daily Attendance" },
+        ].map((tab) => (
+          <button
+            type="button"
+            key={tab.key}
+            data-ocid={`admin.team.${tab.key}.tab`}
+            onClick={() => setActiveSubTab(tab.key as "team" | "attendance")}
+            style={{
+              background:
+                activeSubTab === tab.key
+                  ? "linear-gradient(135deg, #3b82f6, #6366f1)"
+                  : "rgba(255,255,255,0.05)",
+              color: activeSubTab === tab.key ? "#fff" : "#94a3b8",
+              border:
+                activeSubTab === tab.key
+                  ? "none"
+                  : "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 20,
+              padding: "8px 20px",
+              fontSize: 14,
+              fontWeight: activeSubTab === tab.key ? 600 : 400,
+              cursor: "pointer",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Team Members Table */}
-      <div
-        style={{
-          background: "#1e293b",
-          borderRadius: 12,
-          overflow: "hidden",
-          border: "1px solid rgba(255,255,255,0.07)",
-        }}
-      >
-        <div
-          style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
+      {activeSubTab === "attendance" ? (
+        <DailyAttendanceTab
+          members={members}
+          actor={actor}
+          onAttendanceSaved={() => {
+            loadStaffLedgers(members);
           }}
-        >
-          <h3 style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 600 }}>
-            Active Team Members ({members.length})
-          </h3>
-        </div>
-        {loading ? (
-          <div
-            data-ocid="admin.team.loading_state"
-            style={{ padding: 40, textAlign: "center" }}
+        />
+      ) : (
+        <div>
+          <h2
+            style={{
+              color: "#f1f5f9",
+              fontSize: 22,
+              fontWeight: 700,
+              marginBottom: 6,
+            }}
           >
-            <Loader2
-              className="w-8 h-8 animate-spin mx-auto mb-2"
-              style={{ color: "#f59e0b" }}
-            />
-            <p style={{ color: "#64748b", fontSize: 13 }}>Loading team...</p>
-          </div>
-        ) : members.length === 0 ? (
-          <div
-            data-ocid="admin.team.empty_state"
-            style={{ padding: 40, textAlign: "center" }}
-          >
-            <Users
-              style={{
-                width: 40,
-                height: 40,
-                color: "#334155",
-                margin: "0 auto 12px",
-              }}
-            />
-            <p style={{ color: "#64748b", fontSize: 14 }}>
-              No team members added yet.
-            </p>
-          </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                minWidth: 700,
-              }}
-              data-ocid="admin.team.table"
-            >
-              <thead>
-                <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                  {[
-                    "Name",
-                    "Login ID (Mobile)",
-                    "Role",
-                    "Access PIN",
-                    "Status",
-                    "Action",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "10px 20px",
-                        textAlign: "left",
-                        color: "#64748b",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((member, idx) => (
-                  <tr
-                    key={member.mobile}
-                    data-ocid={`admin.team.row.${idx + 1}`}
-                    style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-                  >
-                    <td
-                      style={{
-                        padding: "12px 20px",
-                        color: "#f1f5f9",
-                        fontSize: 14,
-                      }}
-                    >
-                      {member.name}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 20px",
-                        color: "#94a3b8",
-                        fontSize: 14,
-                      }}
-                    >
-                      {member.mobile}
-                    </td>
-                    <td style={{ padding: "12px 20px" }}>
-                      <RoleBadge role={member.role} />
-                    </td>
-                    <td style={{ padding: "12px 20px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <span
-                          style={{
-                            color: "#94a3b8",
-                            fontSize: 14,
-                            fontFamily: "monospace",
-                            letterSpacing: "0.1em",
-                          }}
-                        >
-                          {revealedPins.has(member.mobile)
-                            ? member.pin
-                            : "••••"}
-                        </span>
-                        <button
-                          data-ocid={`admin.team.toggle.${members.indexOf(member) + 1}`}
-                          type="button"
-                          onClick={() => togglePin(member.mobile)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            color: "#64748b",
-                            padding: "2px",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          title={
-                            revealedPins.has(member.mobile)
-                              ? "Hide PIN"
-                              : "Reveal PIN"
-                          }
-                        >
-                          {revealedPins.has(member.mobile) ? (
-                            <EyeOff style={{ width: 14, height: 14 }} />
-                          ) : (
-                            <Eye style={{ width: 14, height: 14 }} />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                    <td style={{ padding: "12px 20px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <Button
-                          data-ocid={`admin.team.reset_pin_button.${idx + 1}`}
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setResetPinTarget({
-                              mobile: member.mobile,
-                              name: member.name,
-                            });
-                            setNewPin("");
-                          }}
-                          style={{
-                            color: "#f59e0b",
-                            fontSize: 12,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                          title="Reset PIN"
-                        >
-                          <KeyRound style={{ width: 13, height: 13 }} />
-                          Reset PIN
-                        </Button>
-                        <Button
-                          data-ocid={`admin.team.delete_button.${idx + 1}`}
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveMember(member.mobile)}
-                          disabled={removing === member.mobile}
-                          style={{ color: "#f87171", fontSize: 12 }}
-                        >
-                          {removing === member.mobile ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            "Remove"
-                          )}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+            Team & Access
+          </h2>
+          <p style={{ color: "#94a3b8", fontSize: 14, marginBottom: 24 }}>
+            Manage all staff, riders, and printing team members. Each role has a
+            dedicated login portal.
+          </p>
 
-      {/* Reset PIN Modal */}
-      {resetPinTarget && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            background: "rgba(0,0,0,0.7)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={() => setResetPinTarget(null)}
-          onKeyDown={(e) => e.key === "Escape" && setResetPinTarget(null)}
-          role="presentation"
-        >
+          {/* Add Team Member Form */}
           <div
             style={{
               background: "#1e293b",
-              borderRadius: 14,
-              padding: 28,
-              width: 360,
-              border: "1px solid rgba(255,255,255,0.1)",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+              borderRadius: 12,
+              padding: 20,
+              marginBottom: 24,
+              border: "1px solid rgba(255,255,255,0.07)",
             }}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            aria-label="Reset PIN dialog"
+          >
+            <h3
+              style={{
+                color: "#f59e0b",
+                fontSize: 15,
+                fontWeight: 600,
+                marginBottom: 16,
+              }}
+            >
+              Add New Team Member
+            </h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              <div>
+                <Label
+                  style={{
+                    color: "#cbd5e1",
+                    fontSize: 12,
+                    marginBottom: 6,
+                    display: "block",
+                  }}
+                >
+                  Full Name
+                </Label>
+                <Input
+                  data-ocid="admin.team.name.input"
+                  placeholder="Employee name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  style={{
+                    background: "#0f172a",
+                    border: "1px solid #334155",
+                    color: "#f1f5f9",
+                  }}
+                />
+              </div>
+              <div>
+                <Label
+                  style={{
+                    color: "#cbd5e1",
+                    fontSize: 12,
+                    marginBottom: 6,
+                    display: "block",
+                  }}
+                >
+                  Mobile Number (Login ID)
+                </Label>
+                <Input
+                  data-ocid="admin.team.mobile.input"
+                  placeholder="10-digit mobile"
+                  maxLength={10}
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
+                  style={{
+                    background: "#0f172a",
+                    border: "1px solid #334155",
+                    color: "#f1f5f9",
+                  }}
+                />
+              </div>
+              <div>
+                <Label
+                  style={{
+                    color: "#cbd5e1",
+                    fontSize: 12,
+                    marginBottom: 6,
+                    display: "block",
+                  }}
+                >
+                  4-Digit Login PIN
+                </Label>
+                <Input
+                  data-ocid="admin.team.pin.input"
+                  type="password"
+                  placeholder="PIN"
+                  maxLength={4}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                  style={{
+                    background: "#0f172a",
+                    border: "1px solid #334155",
+                    color: "#f1f5f9",
+                  }}
+                />
+              </div>
+              <div>
+                <Label
+                  style={{
+                    color: "#cbd5e1",
+                    fontSize: 12,
+                    marginBottom: 6,
+                    display: "block",
+                  }}
+                >
+                  Monthly Base Salary (₹)
+                </Label>
+                <Input
+                  data-ocid="admin.team.salary.input"
+                  type="number"
+                  placeholder="e.g. 10000"
+                  value={baseSalary}
+                  onChange={(e) => setBaseSalary(e.target.value)}
+                  style={{
+                    background: "#0f172a",
+                    border: "1px solid #334155",
+                    color: "#f1f5f9",
+                  }}
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <Label
+                  style={{
+                    color: "#cbd5e1",
+                    fontSize: 12,
+                    marginBottom: 8,
+                    display: "block",
+                  }}
+                >
+                  Accesses (select all that apply)
+                </Label>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 8,
+                  }}
+                >
+                  {ACCESS_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.key}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        padding: "10px 12px",
+                        background: accesses.includes(opt.key)
+                          ? opt.bg
+                          : "#0f172a",
+                        border: `1px solid ${accesses.includes(opt.key) ? opt.color : "#334155"}`,
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={accesses.includes(opt.key)}
+                        onChange={(e) => {
+                          if (e.target.checked)
+                            setAccesses((prev) => [...prev, opt.key]);
+                          else
+                            setAccesses((prev) =>
+                              prev.filter((a) => a !== opt.key),
+                            );
+                        }}
+                        style={{ marginTop: 2, accentColor: opt.color }}
+                      />
+                      <div>
+                        <div
+                          style={{
+                            color: opt.color,
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {opt.label}
+                        </div>
+                        <div style={{ color: "#64748b", fontSize: 11 }}>
+                          {opt.desc}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <Button
+              data-ocid="admin.team.add.primary_button"
+              onClick={handleAddMember}
+              disabled={adding}
+              style={{
+                marginTop: 16,
+                background: "#f59e0b",
+                color: "#0f172a",
+                fontWeight: 700,
+                border: 0,
+              }}
+            >
+              {adding ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Users className="w-4 h-4 mr-2" />
+                  Add Team Member
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Team Members Table */}
+          <div
+            style={{
+              background: "#1e293b",
+              borderRadius: 12,
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.07)",
+            }}
           >
             <div
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 6,
+                padding: "16px 20px",
+                borderBottom: "1px solid rgba(255,255,255,0.07)",
               }}
             >
-              <h3
-                style={{
-                  color: "#f1f5f9",
-                  fontSize: 17,
-                  fontWeight: 700,
-                  margin: 0,
-                }}
-              >
-                Reset PIN
+              <h3 style={{ color: "#f1f5f9", fontSize: 15, fontWeight: 600 }}>
+                Active Team Members ({members.length})
               </h3>
-              <button
-                type="button"
-                onClick={() => setResetPinTarget(null)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "#64748b",
-                  padding: 4,
-                  display: "flex",
-                }}
-              >
-                <X style={{ width: 18, height: 18 }} />
-              </button>
             </div>
-            <p style={{ color: "#94a3b8", fontSize: 13, marginBottom: 20 }}>
-              Setting new PIN for{" "}
-              <strong style={{ color: "#f1f5f9" }}>
-                {resetPinTarget.name}
-              </strong>
-            </p>
-
-            <label
-              htmlFor="reset-pin-input"
-              style={{
-                display: "block",
-                color: "#94a3b8",
-                fontSize: 13,
-                fontWeight: 500,
-                marginBottom: 8,
-              }}
-            >
-              New 4-Digit PIN
-            </label>
-            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-              <input
-                data-ocid="admin.team.input"
-                id="reset-pin-input"
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={newPin}
-                onChange={(e) =>
-                  setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-                }
-                placeholder="••••"
-                style={{
-                  flex: 1,
-                  background: "#0f172a",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: 8,
-                  padding: "10px 14px",
-                  color: "#f1f5f9",
-                  fontSize: 20,
-                  letterSpacing: "0.3em",
-                  fontFamily: "monospace",
-                  outline: "none",
-                }}
-              />
-              <button
-                data-ocid="admin.team.secondary_button"
-                type="button"
-                onClick={() =>
-                  setNewPin(String(Math.floor(1000 + Math.random() * 9000)))
-                }
-                style={{
-                  background: "rgba(245,158,11,0.15)",
-                  border: "1px solid rgba(245,158,11,0.3)",
-                  borderRadius: 8,
-                  padding: "10px 14px",
-                  color: "#f59e0b",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
+            {loading ? (
+              <div
+                data-ocid="admin.team.loading_state"
+                style={{ padding: 40, textAlign: "center" }}
               >
-                Generate Random
-              </button>
-            </div>
-
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                data-ocid="admin.team.cancel_button"
-                type="button"
-                onClick={() => setResetPinTarget(null)}
-                style={{
-                  flex: 1,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 8,
-                  padding: "10px 0",
-                  color: "#94a3b8",
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
+                <Loader2
+                  className="w-8 h-8 animate-spin mx-auto mb-2"
+                  style={{ color: "#f59e0b" }}
+                />
+                <p style={{ color: "#64748b", fontSize: 13 }}>
+                  Loading team...
+                </p>
+              </div>
+            ) : members.length === 0 ? (
+              <div
+                data-ocid="admin.team.empty_state"
+                style={{ padding: 40, textAlign: "center" }}
               >
-                Cancel
-              </button>
-              <button
-                data-ocid="admin.team.save_button"
-                type="button"
-                onClick={handleResetPin}
-                disabled={savingPin || newPin.length !== 4}
-                style={{
-                  flex: 2,
-                  background:
-                    newPin.length === 4
-                      ? "linear-gradient(135deg, #f59e0b, #d97706)"
-                      : "rgba(245,158,11,0.3)",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "10px 0",
-                  color: newPin.length === 4 ? "#fff" : "#94a3b8",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: newPin.length === 4 ? "pointer" : "not-allowed",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                }}
-              >
-                {savingPin ? (
-                  <Loader2
-                    style={{ width: 16, height: 16 }}
-                    className="animate-spin"
-                  />
-                ) : null}
-                Save Changes
-              </button>
-            </div>
+                <Users
+                  style={{
+                    width: 40,
+                    height: 40,
+                    color: "#334155",
+                    margin: "0 auto 12px",
+                  }}
+                />
+                <p style={{ color: "#64748b", fontSize: 14 }}>
+                  No team members added yet.
+                </p>
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    minWidth: 700,
+                  }}
+                  data-ocid="admin.team.table"
+                >
+                  <thead>
+                    <tr style={{ background: "rgba(255,255,255,0.03)" }}>
+                      {[
+                        "Name",
+                        "Login ID (Mobile)",
+                        "Accesses",
+                        "Access PIN",
+                        "Mode",
+                        "Salary Due (₹)",
+                        "Pay Salary",
+                        "Action",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            padding: "10px 20px",
+                            textAlign: "left",
+                            color: "#64748b",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map((member, idx) => (
+                      <tr
+                        key={member.mobile}
+                        data-ocid={`admin.team.row.${idx + 1}`}
+                        style={{
+                          borderTop: "1px solid rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "12px 20px",
+                            fontSize: 14,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setStaffLedgerModal({ member })}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              color: "#60a5fa",
+                              fontSize: 14,
+                              fontWeight: 600,
+                              textDecoration: "underline",
+                              padding: 0,
+                            }}
+                          >
+                            {member.name}
+                          </button>
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 20px",
+                            color: "#94a3b8",
+                            fontSize: 14,
+                          }}
+                        >
+                          {member.mobile}
+                        </td>
+                        <td style={{ padding: "12px 20px", maxWidth: 200 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: 4,
+                            }}
+                          >
+                            {(member.role || "")
+                              .split(",")
+                              .map((a) => a.trim())
+                              .filter(Boolean)
+                              .map((acc) => {
+                                const opt =
+                                  ACCESS_OPTIONS.find((o) => o.key === acc) ??
+                                  (acc === "Shop Staff"
+                                    ? ACCESS_OPTIONS[0]
+                                    : acc === "Rider"
+                                      ? ACCESS_OPTIONS[1]
+                                      : acc === "Bulk Printing Staff"
+                                        ? ACCESS_OPTIONS[2]
+                                        : null);
+                                if (!opt) return null;
+                                return (
+                                  <span
+                                    key={acc}
+                                    style={{
+                                      display: "inline-block",
+                                      padding: "2px 8px",
+                                      borderRadius: 12,
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: opt.color,
+                                      background: opt.bg,
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </span>
+                                );
+                              })}
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 20px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                          >
+                            <span
+                              style={{
+                                color: "#94a3b8",
+                                fontSize: 14,
+                                fontFamily: "monospace",
+                                letterSpacing: "0.1em",
+                              }}
+                            >
+                              {revealedPins.has(member.mobile)
+                                ? member.pin
+                                : "••••"}
+                            </span>
+                            <button
+                              data-ocid={`admin.team.toggle.${members.indexOf(member) + 1}`}
+                              type="button"
+                              onClick={() => togglePin(member.mobile)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                color: "#64748b",
+                                padding: "2px",
+                                display: "flex",
+                                alignItems: "center",
+                              }}
+                              title={
+                                revealedPins.has(member.mobile)
+                                  ? "Hide PIN"
+                                  : "Reveal PIN"
+                              }
+                            >
+                              {revealedPins.has(member.mobile) ? (
+                                <EyeOff style={{ width: 14, height: 14 }} />
+                              ) : (
+                                <Eye style={{ width: 14, height: 14 }} />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 20px" }}>
+                          <select
+                            value={
+                              (member as any).active !== false
+                                ? "Active"
+                                : "Inactive"
+                            }
+                            onChange={(e) =>
+                              handleToggleActive(
+                                member.mobile,
+                                e.target.value === "Active",
+                              )
+                            }
+                            style={{
+                              background:
+                                (member as any).active !== false
+                                  ? "rgba(34,197,94,0.15)"
+                                  : "rgba(239,68,68,0.15)",
+                              color:
+                                (member as any).active !== false
+                                  ? "#22c55e"
+                                  : "#ef4444",
+                              border: `1px solid ${(member as any).active !== false ? "#22c55e" : "#ef4444"}`,
+                              borderRadius: 6,
+                              padding: "4px 8px",
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                          </select>
+                        </td>
+                        <td
+                          style={{ padding: "12px 20px", whiteSpace: "nowrap" }}
+                        >
+                          {(() => {
+                            const due = salaryDueMap[member.mobile] ?? 0;
+                            return (
+                              <span
+                                style={{
+                                  color: due > 0 ? "#f87171" : "#22c55e",
+                                  fontWeight: 700,
+                                  fontSize: 14,
+                                }}
+                              >
+                                ₹
+                                {due.toLocaleString("en-IN", {
+                                  maximumFractionDigits: 0,
+                                })}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td
+                          style={{ padding: "12px 20px", whiteSpace: "nowrap" }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 6,
+                              alignItems: "center",
+                            }}
+                          >
+                            <input
+                              type="number"
+                              placeholder="Amount"
+                              value={salaryInputs[member.mobile] || ""}
+                              onChange={(e) =>
+                                setSalaryInputs((prev) => ({
+                                  ...prev,
+                                  [member.mobile]: e.target.value,
+                                }))
+                              }
+                              style={{
+                                width: 90,
+                                padding: "5px 8px",
+                                background: "#0f172a",
+                                border: "1px solid #334155",
+                                borderRadius: 6,
+                                color: "#f1f5f9",
+                                fontSize: 12,
+                              }}
+                            />
+                            <button
+                              type="button"
+                              data-ocid={`admin.team.pay_salary_button.${idx + 1}`}
+                              onClick={() => handlePaySalary(member)}
+                              style={{
+                                padding: "5px 10px",
+                                background: "#16a34a",
+                                color: "white",
+                                border: "none",
+                                borderRadius: 6,
+                                fontSize: 12,
+                                cursor: "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Pay
+                            </button>
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 20px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <Button
+                              data-ocid={`admin.team.reset_pin_button.${idx + 1}`}
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setResetPinTarget({
+                                  mobile: member.mobile,
+                                  name: member.name,
+                                });
+                                setNewPin("");
+                              }}
+                              style={{
+                                color: "#f59e0b",
+                                fontSize: 12,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                              title="Reset PIN"
+                            >
+                              <KeyRound style={{ width: 13, height: 13 }} />
+                              Reset PIN
+                            </Button>
+                            <Button
+                              data-ocid={`admin.team.delete_button.${idx + 1}`}
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveMember(member.mobile)}
+                              disabled={removing === member.mobile}
+                              style={{ color: "#f87171", fontSize: 12 }}
+                            >
+                              {removing === member.mobile ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                "Remove"
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
+
+          {/* Reset PIN Modal */}
+          {resetPinTarget && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 1000,
+                background: "rgba(0,0,0,0.7)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onClick={() => setResetPinTarget(null)}
+              onKeyDown={(e) => e.key === "Escape" && setResetPinTarget(null)}
+              role="presentation"
+            >
+              <div
+                style={{
+                  background: "#1e293b",
+                  borderRadius: 14,
+                  padding: 28,
+                  width: 360,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                aria-label="Reset PIN dialog"
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <h3
+                    style={{
+                      color: "#f1f5f9",
+                      fontSize: 17,
+                      fontWeight: 700,
+                      margin: 0,
+                    }}
+                  >
+                    Reset PIN
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setResetPinTarget(null)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#64748b",
+                      padding: 4,
+                      display: "flex",
+                    }}
+                  >
+                    <X style={{ width: 18, height: 18 }} />
+                  </button>
+                </div>
+                <p style={{ color: "#94a3b8", fontSize: 13, marginBottom: 20 }}>
+                  Setting new PIN for{" "}
+                  <strong style={{ color: "#f1f5f9" }}>
+                    {resetPinTarget.name}
+                  </strong>
+                </p>
+
+                <label
+                  htmlFor="reset-pin-input"
+                  style={{
+                    display: "block",
+                    color: "#94a3b8",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    marginBottom: 8,
+                  }}
+                >
+                  New 4-Digit PIN
+                </label>
+                <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                  <input
+                    data-ocid="admin.team.input"
+                    id="reset-pin-input"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={newPin}
+                    onChange={(e) =>
+                      setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                    }
+                    placeholder="••••"
+                    style={{
+                      flex: 1,
+                      background: "#0f172a",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      color: "#f1f5f9",
+                      fontSize: 20,
+                      letterSpacing: "0.3em",
+                      fontFamily: "monospace",
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    data-ocid="admin.team.secondary_button"
+                    type="button"
+                    onClick={() =>
+                      setNewPin(String(Math.floor(1000 + Math.random() * 9000)))
+                    }
+                    style={{
+                      background: "rgba(245,158,11,0.15)",
+                      border: "1px solid rgba(245,158,11,0.3)",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      color: "#f59e0b",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Generate Random
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    data-ocid="admin.team.cancel_button"
+                    type="button"
+                    onClick={() => setResetPinTarget(null)}
+                    style={{
+                      flex: 1,
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 8,
+                      padding: "10px 0",
+                      color: "#94a3b8",
+                      fontSize: 14,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    data-ocid="admin.team.save_button"
+                    type="button"
+                    onClick={handleResetPin}
+                    disabled={savingPin || newPin.length !== 4}
+                    style={{
+                      flex: 2,
+                      background:
+                        newPin.length === 4
+                          ? "linear-gradient(135deg, #f59e0b, #d97706)"
+                          : "rgba(245,158,11,0.3)",
+                      border: "none",
+                      borderRadius: 8,
+                      padding: "10px 0",
+                      color: newPin.length === 4 ? "#fff" : "#94a3b8",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: newPin.length === 4 ? "pointer" : "not-allowed",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                    }}
+                  >
+                    {savingPin ? (
+                      <Loader2
+                        style={{ width: 16, height: 16 }}
+                        className="animate-spin"
+                      />
+                    ) : null}
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Staff Ledger Modal */}
+          {staffLedgerModal &&
+            (() => {
+              const m = staffLedgerModal.member;
+              const entries = (staffLedgerMap[m.mobile] || [])
+                .slice()
+                .sort((a, b) => a.date.localeCompare(b.date));
+              let runningBalance = 0;
+              const rows = entries.map((e) => {
+                if (e.entryType === "earned") runningBalance += e.amount;
+                else runningBalance -= e.amount;
+                return { ...e, balance: runningBalance };
+              });
+              const totalEarned = entries
+                .filter((e) => e.entryType === "earned")
+                .reduce((s, e) => s + e.amount, 0);
+              const totalPaid = entries
+                .filter((e) => e.entryType === "paid")
+                .reduce((s, e) => s + e.amount, 0);
+              const currentDue = totalEarned - totalPaid;
+              const now = new Date();
+              const monthYear = now.toLocaleString("en-IN", {
+                month: "long",
+                year: "numeric",
+              });
+              return (
+                <div
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 1100,
+                    background: "rgba(0,0,0,0.75)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 20,
+                  }}
+                  onClick={() => setStaffLedgerModal(null)}
+                  onKeyDown={(e) =>
+                    e.key === "Escape" && setStaffLedgerModal(null)
+                  }
+                  role="presentation"
+                >
+                  <style>{`
+                  @media print {
+                    body > * { display: none !important; }
+                    #staff-ledger-print { display: block !important; position: fixed; top: 0; left: 0; width: 100%; background: white; color: black; padding: 32px; }
+                    #staff-ledger-print * { color: black !important; background: white !important; border-color: #ccc !important; }
+                    #staff-ledger-print .no-print { display: none !important; }
+                  }
+                `}</style>
+                  <div
+                    id="staff-ledger-print"
+                    style={{
+                      background: "#1e293b",
+                      borderRadius: 16,
+                      padding: 28,
+                      width: "100%",
+                      maxWidth: 800,
+                      maxHeight: "90vh",
+                      overflowY: "auto",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    aria-label="Staff Ledger"
+                  >
+                    {/* Print header (hidden on screen) */}
+                    <div style={{ display: "none" }} className="print-header">
+                      <div style={{ textAlign: "center", marginBottom: 16 }}>
+                        <h1 style={{ fontSize: 22, fontWeight: 800 }}>
+                          ClikMate — Staff Payslip
+                        </h1>
+                        <p style={{ fontSize: 14 }}>
+                          {m.name} | {monthYear}
+                        </p>
+                      </div>
+                      <hr />
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: 20,
+                      }}
+                    >
+                      <div>
+                        <h3
+                          style={{
+                            color: "#f1f5f9",
+                            fontSize: 18,
+                            fontWeight: 700,
+                            marginBottom: 4,
+                          }}
+                        >
+                          Staff Ledger — {m.name}
+                        </h3>
+                        <p style={{ color: "#94a3b8", fontSize: 13 }}>
+                          Mobile: {m.mobile} | Base Salary: ₹
+                          {(m.baseSalary || 0).toLocaleString("en-IN")}/month
+                        </p>
+                      </div>
+                      <div
+                        style={{ display: "flex", gap: 8 }}
+                        className="no-print"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          style={{
+                            padding: "8px 14px",
+                            background: "rgba(99,102,241,0.2)",
+                            color: "#818cf8",
+                            border: "1px solid #6366f1",
+                            borderRadius: 8,
+                            fontSize: 13,
+                            cursor: "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          🖨️ Print Payslip (A4)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStaffLedgerModal(null)}
+                          style={{
+                            background: "rgba(255,255,255,0.05)",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: 8,
+                            padding: "8px 14px",
+                            color: "#94a3b8",
+                            fontSize: 13,
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+                    </div>
+
+                    {rows.length === 0 ? (
+                      <div
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: "#64748b",
+                        }}
+                      >
+                        No ledger entries yet. Save attendance to start tracking
+                        earnings.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table
+                          style={{ width: "100%", borderCollapse: "collapse" }}
+                        >
+                          <thead>
+                            <tr style={{ background: "rgba(15,23,42,0.6)" }}>
+                              {[
+                                "Date",
+                                "Description",
+                                "Earned (+)",
+                                "Paid (-)",
+                                "Running Balance",
+                              ].map((h) => (
+                                <th
+                                  key={h}
+                                  style={{
+                                    padding: "10px 14px",
+                                    textAlign: "left",
+                                    color: "#64748b",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.04em",
+                                    border: "1px solid rgba(255,255,255,0.07)",
+                                  }}
+                                >
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row) => (
+                              <tr
+                                key={String(row.id)}
+                                style={{
+                                  borderTop: "1px solid rgba(255,255,255,0.05)",
+                                }}
+                              >
+                                <td
+                                  style={{
+                                    padding: "10px 14px",
+                                    color: "#94a3b8",
+                                    fontSize: 13,
+                                    border: "1px solid rgba(255,255,255,0.07)",
+                                  }}
+                                >
+                                  {row.date}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 14px",
+                                    color: "#f1f5f9",
+                                    fontSize: 13,
+                                    border: "1px solid rgba(255,255,255,0.07)",
+                                  }}
+                                >
+                                  {row.description}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 14px",
+                                    color:
+                                      row.entryType === "earned"
+                                        ? "#22c55e"
+                                        : "#475569",
+                                    fontSize: 13,
+                                    fontWeight:
+                                      row.entryType === "earned" ? 600 : 400,
+                                    border: "1px solid rgba(255,255,255,0.07)",
+                                  }}
+                                >
+                                  {row.entryType === "earned"
+                                    ? `₹${row.amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+                                    : "—"}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 14px",
+                                    color:
+                                      row.entryType === "paid"
+                                        ? "#f87171"
+                                        : "#475569",
+                                    fontSize: 13,
+                                    fontWeight:
+                                      row.entryType === "paid" ? 600 : 400,
+                                    border: "1px solid rgba(255,255,255,0.07)",
+                                  }}
+                                >
+                                  {row.entryType === "paid"
+                                    ? `₹${row.amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+                                    : "—"}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 14px",
+                                    color:
+                                      row.balance >= 0 ? "#f59e0b" : "#f87171",
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    border: "1px solid rgba(255,255,255,0.07)",
+                                  }}
+                                >
+                                  ₹
+                                  {row.balance.toLocaleString("en-IN", {
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 12,
+                        marginTop: 20,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {[
+                        {
+                          label: "Total Earned",
+                          value: `₹${totalEarned.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+                          color: "#22c55e",
+                        },
+                        {
+                          label: "Total Paid",
+                          value: `₹${totalPaid.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+                          color: "#f87171",
+                        },
+                        {
+                          label: "Current Due",
+                          value: `₹${Math.max(0, currentDue).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+                          color: "#f59e0b",
+                        },
+                      ].map((s) => (
+                        <div
+                          key={s.label}
+                          style={{
+                            flex: 1,
+                            minWidth: 140,
+                            background: "rgba(15,23,42,0.6)",
+                            borderRadius: 10,
+                            padding: "14px 18px",
+                            border: "1px solid rgba(255,255,255,0.07)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              color: "#64748b",
+                              fontSize: 11,
+                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {s.label}
+                          </div>
+                          <div
+                            style={{
+                              color: s.color,
+                              fontSize: 20,
+                              fontWeight: 800,
+                            }}
+                          >
+                            {s.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Print Signature Line */}
+                    <div
+                      style={{
+                        marginTop: 32,
+                        textAlign: "right",
+                        color: "#64748b",
+                        fontSize: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          borderTop: "1px solid #334155",
+                          paddingTop: 8,
+                          display: "inline-block",
+                          minWidth: 200,
+                        }}
+                      >
+                        Authorized Signature / Shop Seal
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
         </div>
       )}
     </div>
@@ -7075,6 +9047,235 @@ function B2BLeadsSection({ actor }: { actor: backendInterface | null }) {
   );
 }
 
+// --- Helpdesk Section ---
+function HelpdeskSection({ actor }: { actor: backendInterface | null }) {
+  const [tickets, setTickets] = React.useState<SupportTicket[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = React.useCallback(async () => {
+    if (!actor) return;
+    try {
+      const all = await (
+        actor as unknown as backendInterface
+      ).getAllSupportTickets();
+      setTickets(all);
+    } catch (e) {
+      console.error("Helpdesk load error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [actor]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  const resolve = async (id: bigint) => {
+    if (!actor) return;
+    try {
+      await (actor as unknown as backendInterface).resolveSupportTicket(id);
+      setTickets((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, resolved: true } : t)),
+      );
+      toast.success("Ticket marked as resolved.");
+    } catch (e) {
+      console.error("Resolve ticket error:", e);
+      toast.error("Failed to resolve ticket.");
+    }
+  };
+
+  return (
+    <div style={{ padding: "24px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          marginBottom: "20px",
+        }}
+      >
+        <Headphones size={22} color="#a78bfa" />
+        <h2
+          style={{
+            color: "white",
+            fontSize: "18px",
+            fontWeight: 700,
+            margin: 0,
+          }}
+        >
+          Helpdesk / Support Tickets
+        </h2>
+      </div>
+      {loading ? (
+        <div
+          data-ocid="admin.helpdesk.loading_state"
+          style={{
+            color: "rgba(255,255,255,0.5)",
+            textAlign: "center",
+            padding: "40px",
+          }}
+        >
+          Loading tickets...
+        </div>
+      ) : tickets.length === 0 ? (
+        <div
+          data-ocid="admin.helpdesk.empty_state"
+          style={{
+            textAlign: "center",
+            padding: "48px 24px",
+            background: "rgba(255,255,255,0.05)",
+            borderRadius: "12px",
+            color: "rgba(255,255,255,0.5)",
+          }}
+        >
+          No support tickets yet.
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "13px",
+            }}
+          >
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                {[
+                  "Ticket ID",
+                  "Order ID",
+                  "Customer Mobile",
+                  "Complaint",
+                  "Date",
+                  "Status",
+                  "Action",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      textAlign: "left",
+                      padding: "10px 14px",
+                      color: "rgba(255,255,255,0.5)",
+                      fontWeight: 500,
+                      whiteSpace: "nowrap",
+                      background: "rgba(255,255,255,0.03)",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.map((t, idx) => (
+                <tr
+                  key={String(t.id)}
+                  data-ocid={`admin.helpdesk.item.${idx + 1}`}
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+                >
+                  <td
+                    style={{
+                      padding: "10px 14px",
+                      color: "white",
+                      fontFamily: "monospace",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    #{String(t.id)}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px 14px",
+                      color: "rgba(255,255,255,0.8)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    #{t.orderId}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px 14px",
+                      color: "rgba(255,255,255,0.8)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {t.customerMobile}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px 14px",
+                      color: "rgba(255,255,255,0.7)",
+                      maxWidth: "240px",
+                    }}
+                  >
+                    {t.complaint.length > 80
+                      ? `${t.complaint.slice(0, 80)}...`
+                      : t.complaint}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px 14px",
+                      color: "rgba(255,255,255,0.6)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {new Date(
+                      Number(t.createdAt / 1_000_000n),
+                    ).toLocaleDateString()}
+                  </td>
+                  <td style={{ padding: "10px 14px" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 10px",
+                        borderRadius: "999px",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        background: t.resolved
+                          ? "rgba(34,197,94,0.15)"
+                          : "rgba(234,179,8,0.15)",
+                        color: t.resolved ? "#4ade80" : "#fbbf24",
+                        border: t.resolved
+                          ? "1px solid rgba(34,197,94,0.3)"
+                          : "1px solid rgba(234,179,8,0.3)",
+                      }}
+                    >
+                      {t.resolved ? "Resolved" : "Open"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "10px 14px" }}>
+                    <button
+                      type="button"
+                      data-ocid={`admin.helpdesk.resolve_button.${idx + 1}`}
+                      disabled={t.resolved}
+                      onClick={() => resolve(t.id)}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: "6px",
+                        border: "none",
+                        cursor: t.resolved ? "not-allowed" : "pointer",
+                        background: t.resolved
+                          ? "rgba(255,255,255,0.07)"
+                          : "rgba(99,102,241,0.25)",
+                        color: t.resolved ? "rgba(255,255,255,0.3)" : "#a5b4fc",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.resolved ? "Resolved" : "Mark Resolved"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Audit & Reports Section ───────────────────────────────────────────────────
 function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
   const { actor } = useActor();
@@ -7111,6 +9312,7 @@ function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
   const [filterMaxAmount, setFilterMaxAmount] = useState("");
   const [filterPaymentMode, setFilterPaymentMode] = useState("All");
   const [filterTxType, setFilterTxType] = useState("All");
+  const [adminTallyFilter, setAdminTallyFilter] = useState<string | null>(null);
   const todayStr = new Date().toISOString().split("T")[0];
   const [incomeForm, setIncomeForm] = useState({
     date: todayStr,
@@ -7140,6 +9342,7 @@ function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
     "Shop Rent",
     "Electricity/Internet",
     "Salary/Rider Payout",
+    "Staff Salary & Payroll",
     "Tea/Snacks",
     "Misc",
   ];
@@ -7643,6 +9846,264 @@ function AuditReportsSection({ isAdmin }: { isAdmin: boolean }) {
           Generate Audit Report
         </button>
       </div>
+
+      {/* Today's Tally Cards */}
+      {(() => {
+        const todaySales = posSales.filter((s) => {
+          const d = new Date(Number(s.createdAt) / 1_000_000);
+          return d.toDateString() === new Date().toDateString();
+        });
+        const totalCash = todaySales
+          .filter((s) => s.paymentMethod === "Cash")
+          .reduce((a, c) => a + c.totalAmount, 0);
+        const totalUpi = todaySales
+          .filter((s) => s.paymentMethod === "UPI")
+          .reduce((a, c) => a + c.totalAmount, 0);
+        const totalSplit = todaySales
+          .filter((s) => s.paymentMethod === "Split")
+          .reduce((a, c) => a + c.totalAmount, 0);
+        const totalKhata = todaySales
+          .filter((s) => s.paymentMethod === "Khata")
+          .reduce((a, c) => a + c.totalAmount, 0);
+        const totalNet = todaySales.reduce((a, c) => a + c.totalAmount, 0);
+        const tallyItems = [
+          { label: "Cash", value: totalCash, color: "#10b981" },
+          { label: "UPI", value: totalUpi, color: "#3b82f6" },
+          { label: "Split", value: totalSplit, color: "#8b5cf6" },
+          { label: "Khata/Due", value: totalKhata, color: "#ef4444" },
+          { label: "Net Sales", value: totalNet, color: "#f59e0b", wide: true },
+        ];
+        const filtered =
+          adminTallyFilter === "Net Sales"
+            ? todaySales
+            : adminTallyFilter
+              ? todaySales.filter(
+                  (s) =>
+                    s.paymentMethod ===
+                    (adminTallyFilter === "Khata/Due"
+                      ? "Khata"
+                      : adminTallyFilter),
+                )
+              : [];
+        return (
+          <div style={{ ...cardBox, marginBottom: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 14,
+              }}
+            >
+              <h3
+                style={{
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: 15,
+                  margin: 0,
+                }}
+              >
+                📊 Today&apos;s Tally
+              </h3>
+              {adminTallyFilter && (
+                <button
+                  type="button"
+                  data-ocid="admin.audit.tally.print.button"
+                  onClick={() => window.print()}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: "rgba(255,255,255,0.06)",
+                    color: "white",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  🖨️ Print Daily Tally (A4)
+                </button>
+              )}
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(5,1fr)",
+                gap: 8,
+                marginBottom: 14,
+              }}
+            >
+              {tallyItems.map((t) => {
+                const isActive = adminTallyFilter === t.label;
+                return (
+                  <button
+                    type="button"
+                    key={t.label}
+                    data-ocid={`admin.tally.${t.label.toLowerCase().replace(/\/| /g, "_")}.card`}
+                    onClick={() =>
+                      setAdminTallyFilter(isActive ? null : t.label)
+                    }
+                    style={{
+                      background: isActive ? `${t.color}30` : `${t.color}15`,
+                      border: `2px solid ${isActive ? t.color : `${t.color}30`}`,
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      gridColumn: (t as any).wide ? "1/-1" : undefined,
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                      textAlign: "left",
+                    }}
+                  >
+                    <p
+                      style={{
+                        color: "rgba(255,255,255,0.5)",
+                        fontSize: 11,
+                        marginBottom: 3,
+                      }}
+                    >
+                      {t.label}
+                      {isActive ? " ✓" : ""}
+                    </p>
+                    <p
+                      style={{ color: t.color, fontWeight: 800, fontSize: 18 }}
+                    >
+                      ₹
+                      {t.value.toLocaleString("en-IN", {
+                        maximumFractionDigits: 0,
+                      })}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+            {!adminTallyFilter ? (
+              <p
+                style={{
+                  color: "rgba(255,255,255,0.35)",
+                  fontSize: 13,
+                  textAlign: "center",
+                  padding: "12px 0",
+                }}
+              >
+                Click a card above to filter today&apos;s transactions
+              </p>
+            ) : filtered.length === 0 ? (
+              <p
+                style={{
+                  color: "rgba(255,255,255,0.35)",
+                  fontSize: 13,
+                  textAlign: "center",
+                  padding: "12px 0",
+                }}
+              >
+                No transactions found for {adminTallyFilter}
+              </p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <div className="print-only" style={{ marginBottom: 12 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 800 }}>
+                    ClikMate - Daily Tally Report
+                  </h2>
+                  <p style={{ fontSize: 13 }}>
+                    {new Date().toLocaleDateString("en-IN", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}{" "}
+                    — Filter: {adminTallyFilter}
+                  </p>
+                </div>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 13,
+                  }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        borderBottom: "1px solid rgba(255,255,255,0.1)",
+                      }}
+                    >
+                      {[
+                        "Time",
+                        "Customer / Note",
+                        "Amount (₹)",
+                        "Payment Mode",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            padding: "6px 10px",
+                            color: "rgba(255,255,255,0.5)",
+                            textAlign: "left",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((s, i) => {
+                      const d = new Date(Number(s.createdAt) / 1_000_000);
+                      return (
+                        <tr
+                          key={String(s.id)}
+                          style={{
+                            borderBottom: "1px solid rgba(255,255,255,0.05)",
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "6px 10px",
+                              color: "rgba(255,255,255,0.7)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {d.toLocaleTimeString("en-IN", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td
+                            style={{
+                              padding: "6px 10px",
+                              color: "rgba(255,255,255,0.7)",
+                            }}
+                          >
+                            {`Transaction #${i + 1}`}
+                          </td>
+                          <td
+                            style={{
+                              padding: "6px 10px",
+                              color: "#f59e0b",
+                              fontWeight: 700,
+                            }}
+                          >
+                            ₹{s.totalAmount.toLocaleString("en-IN")}
+                          </td>
+                          <td
+                            style={{
+                              padding: "6px 10px",
+                              color: "rgba(255,255,255,0.7)",
+                            }}
+                          >
+                            {s.paymentMethod}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Ledger Tabs */}
       <div style={cardBox}>
@@ -9067,6 +11528,7 @@ export default function AdminDashboard() {
     reviews: "Customer Reviews",
     "b2b-leads": "B2B Leads & Quotes",
     audit: "Audit & Reports",
+    helpdesk: "Helpdesk / Support",
   };
 
   // ── View: Not logged in ──────────────────────────────────────────────────────
@@ -9255,6 +11717,96 @@ export default function AdminDashboard() {
             ocid="admin.audit.tab"
             onClick={() => {
               setActiveSection("audit");
+              setSidebarOpen(false);
+            }}
+          />
+          <NavItem
+            icon={Headphones}
+            label="Helpdesk / Support"
+            active={activeSection === "helpdesk"}
+            ocid="admin.helpdesk.tab"
+            onClick={() => {
+              setActiveSection("helpdesk");
+              setSidebarOpen(false);
+            }}
+          />
+          {/* Accounts / Khata Section */}
+          <div
+            style={{
+              margin: "12px 10px 4px",
+              padding: "6px 8px",
+              borderTop: "1px solid rgba(255,255,255,0.07)",
+            }}
+          >
+            <span
+              style={{
+                color: "#64748b",
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Accounts / Khata
+            </span>
+          </div>
+          <NavItem
+            icon={BookOpen}
+            label="Khata Settlement"
+            active={false}
+            ocid="admin.khata_settlement.shortcut"
+            onClick={() => {
+              window.location.hash = "#/admin/khata-settlement";
+              setSidebarOpen(false);
+            }}
+          />
+          {/* Operations Quick Links */}
+          <div
+            style={{
+              margin: "12px 10px 4px",
+              padding: "6px 8px",
+              borderTop: "1px solid rgba(255,255,255,0.07)",
+            }}
+          >
+            <span
+              style={{
+                color: "#64748b",
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Operations
+            </span>
+          </div>
+          <NavItem
+            icon={ShoppingCart}
+            label="POS / New Bill"
+            active={false}
+            ocid="admin.pos.shortcut"
+            onClick={() => {
+              window.location.hash = "#/pos";
+              setSidebarOpen(false);
+            }}
+          />
+          <NavItem
+            icon={Truck}
+            label="Rider Dashboard"
+            active={false}
+            ocid="admin.rider.shortcut"
+            onClick={() => {
+              window.location.hash = "#/rider";
+              setSidebarOpen(false);
+            }}
+          />
+          <NavItem
+            icon={Layers}
+            label="Bulk Dashboard"
+            active={false}
+            ocid="admin.bulk.shortcut"
+            onClick={() => {
+              window.location.hash = "#/bulk-dashboard";
               setSidebarOpen(false);
             }}
           />
@@ -9465,6 +12017,9 @@ export default function AdminDashboard() {
           )}
           {activeSection === "audit" && (
             <AuditReportsSection isAdmin={isAdmin} />
+          )}
+          {activeSection === "helpdesk" && (
+            <HelpdeskSection actor={actor as unknown as backendInterface} />
           )}
         </main>
       </div>

@@ -1,52 +1,46 @@
 # ClikMate Service Center
 
 ## Current State
-AdminDashboard.tsx (9381 lines) contains multiple form submission handlers that follow a blocking pattern: `await backend call → then update UI`. If the backend is slow or fails, the table never updates. Key affected handlers:
-
-- `handleAddMember` in `TeamAccessSection` (line ~5583): calls `addTeamMember`, then calls `loadMembers()` to refresh. No optimistic update.
-- `handleAddIncome` in AccountsSection (line ~7160): calls `addManualIncome`, then `loadData()`
-- `handleAddExpense` (line ~7197): calls `addExpense`, then `loadData()`
-- Catalog `handleSave` in modal (line ~566): calls `addCatalogItem` / `updateCatalogItem`, then `onSaved()`
+- `Rider` type has: name, mobile, pin, role — NO baseSalary field
+- Attendance saves to localStorage only, no backend persistence
+- Team table has Pay Salary column (amount input + Pay button) but no Salary Due column
+- Pay Salary calls `addExpense()` under "Staff Salary & Payroll" — no staff ledger
+- No staff ledger DB or modal exists
+- No backend functions for attendance or staff ledger
 
 ## Requested Changes (Diff)
 
 ### Add
-- Optimistic update logic to all key form submissions: immediately mutate local state, fire backend async, revert + show red error toast on failure
-- Explicit error messaging: catch block must extract `err.message` and display it in toast (not generic text)
+- `baseSalary` field on `Rider` type in backend
+- `AttendanceRecord` type: { mobile, date, status (Present/Absent/Half-Day) }
+- `StaffLedgerEntry` type: { id, mobile, date, description, amount, entryType ("earned"|"paid") }
+- `addAttendanceRecord(mobile, date, status)` backend function
+- `getAttendanceForMobile(mobile)` backend function  
+- `addStaffLedgerEntry(mobile, date, description, amount, entryType)` backend function
+- `getStaffLedgerEntries(mobile)` backend function
+- `updateRiderSalary(mobile, baseSalary)` backend function
+- `Salary Due (₹)` column in Active Team Members table — real-time calculated
+- Staff Ledger Modal: clickable staff name → modal showing Date, Description, Amount, Running Balance columns
+- Print Ledger Statement button in Staff Ledger Modal (A4 format)
+- When attendance is saved (Daily Attendance tab), also call backend `addAttendanceRecord` for each staff and add staff ledger "Attendance Earned" entry
+- When Pay is clicked: call `addStaffLedgerEntry` with "Salary Paid" + existing `addExpense` call
+- `baseSalary` field in Add Team Member form
 
 ### Modify
-- `handleAddMember`: Add optimistic member to `members` state immediately with `{ name, mobile, pin, role }`. Fire `addTeamMember` in background. On success: do nothing extra (already in state). On failure: revert by removing the optimistic entry from `members`, show red error toast with exact error message. Clear form and show success toast immediately after optimistic add (not after await).
-- `handleAddIncome`: Add optimistic income entry to `incomes` state with a temporary negative BigInt ID. Fire `addManualIncome` in background. On failure: revert + show red error toast.
-- `handleAddExpense`: Same pattern — add optimistic expense entry to `expenses` with temp negative BigInt ID. Fire `addExpense` in background. On failure: revert + show red toast.
-- Catalog `handleSave` (add mode only): Add optimistic item with temp BigInt ID. On failure: revert + show error.
+- `addTeamMember` backend to accept and store `baseSalary` 
+- `DailyAttendanceTab` save handler: also persist to backend and add earned entries to staff ledger
+- `handlePaySalary`: also add entry to staff ledger
+- Team table to add `Salary Due (₹)` column before Pay Action column
 
 ### Remove
-- `await loadMembers()` / `await loadData()` / `onSaved()` calls that trigger full refresh AFTER submission (replaced by optimistic direct state mutation)
+- Nothing removed
 
 ## Implementation Plan
-1. In `TeamAccessSection.handleAddMember`:
-   - Build `optimisticMember = { name: name.trim(), mobile, pin, role }`
-   - Call `setMembers(prev => [optimisticMember, ...prev])` immediately
-   - Clear form fields and show success toast immediately
-   - Fire backend call WITHOUT await (fire-and-forget with catch)
-   - In catch: `setMembers(prev => prev.filter(m => m.mobile !== mobile))` + `toast.error('Failed: ' + msg)`
-   - Remove the final `await loadMembers()` from success path
-
-2. In `handleAddExpense` (add mode):
-   - Build `optimisticExpense` with `id: BigInt(-Date.now())`, fields from form
-   - `setExpenses(prev => [optimisticExpense, ...prev])` immediately
-   - Close modal, clear form, show success toast immediately
-   - Fire `addExpense` without await
-   - On error: revert via filter on temp id + show exact error
-
-3. In `handleAddIncome` (add mode):
-   - Same pattern as expense
-
-4. In catalog `handleSave` (non-edit path):
-   - Build optimistic CatalogItem with temp BigInt ID
-   - Call `onSaved()` callback immediately (so parent refreshes or adds to list)
-   - Fire backend without await
-   - On error: show error toast (parent will re-fetch to correct state)
-   - NOTE: This one is more complex due to blob uploads — only apply optimistic pattern AFTER file uploads complete; the optimistic part is just the state update after backend prepare
-
-5. In `EducatorServicesSection.handleSubmit` (B2B form): already works — file is saved as filename string. No changes needed unless testing shows issues.
+1. Update backend: new `Rider` type with baseSalary, new AttendanceRecord and StaffLedgerEntry types, new storage maps, new functions for attendance CRUD, staff ledger CRUD, updateRiderSalary
+2. Update `addTeamMember` to accept baseSalary parameter
+3. Frontend: add baseSalary input to Add Team Member form
+4. Frontend: load attendance from backend; when saving attendance, fire backend calls + inject earned ledger entries
+5. Frontend: compute `salaryDue` per member (baseSalary/30 * presentDaysThisMonth - paidThisMonth from staff ledger)
+6. Frontend: add Salary Due column to table (red if > 0)
+7. Frontend: make staff name clickable → Staff Ledger Modal with transaction table + print button
+8. Frontend: on Pay click, also add staff ledger entry

@@ -67,10 +67,12 @@ import BulkDashboard from "./pages/BulkDashboard";
 import BulkLoginPage from "./pages/BulkLoginPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import ItemDetailPage from "./pages/ItemDetailPage";
+import KhataSettlementPage from "./pages/KhataSettlementPage";
 import OrderSuccessPage from "./pages/OrderSuccessPage";
 import PosLoginPage from "./pages/PosLoginPage";
 import PosPage from "./pages/PosPage";
 import RiderDashboard from "./pages/RiderDashboard";
+import SupportPage from "./pages/SupportPage";
 import TeamPortalPage from "./pages/TeamPortalPage";
 import VaultPage from "./pages/VaultPage";
 
@@ -1453,6 +1455,11 @@ export default function App() {
           <Route path="/bulk-dashboard" element={<BulkDashboard />} />
           <Route path="/bulk-login" element={<BulkLoginPage />} />
           <Route path="/vault" element={<VaultPage />} />
+          <Route path="/support" element={<SupportPage />} />
+          <Route
+            path="/admin/khata-settlement"
+            element={<KhataSettlementPage />}
+          />
           <Route
             path="/order-success/:orderId"
             element={<OrderSuccessPage />}

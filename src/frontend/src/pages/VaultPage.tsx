@@ -11,6 +11,7 @@ import {
   Clock,
   Download,
   FileText,
+  Headphones,
   Printer,
   RefreshCw,
   Shield,
@@ -249,6 +250,17 @@ export default function VaultPage() {
               <p className="text-white/50 text-xs mt-0.5">{phone}</p>
             </div>
           </div>
+          <Link to="/support" className="ml-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white hover:bg-white/10 gap-1.5"
+              data-ocid="vault.help_support.link"
+            >
+              <Headphones className="w-4 h-4" />
+              <span className="hidden sm:inline">Help & Support</span>
+            </Button>
+          </Link>
         </div>
       </header>
 

@@ -1,56 +1,42 @@
 import Map "mo:core/Map";
+import List "mo:core/List";
 import Nat "mo:core/Nat";
+import Text "mo:core/Text";
 
 module {
-  // Old typesetting quote request (old actor state)
-  type OldTypesettingQuoteRequest = {
-    id : Nat;
+  public type OldRider = {
     name : Text;
-    phone : Text;
-    subject : Text;
-    format : Text;
-    language : Text;
-    fileUrl : Text;
-    status : Text;
-    submittedAt : Int;
+    mobile : Text;
+    pin : Text;
+    role : Text;
   };
 
-  // Old actor type
-  type OldActor = {
-    typesettingQuotes : Map.Map<Nat, OldTypesettingQuoteRequest>;
+  public type OldActor = {
+    riders : Map.Map<Text, OldRider>;
+    riderActiveStatus : Map.Map<Text, Bool>;
+    // ... other actor fields
   };
 
-  // New types with extended fields
-  type NewTypesettingQuoteRequest = {
-    id : Nat;
+  public type NewRider = {
     name : Text;
-    phone : Text;
-    subject : Text;
-    format : Text;
-    language : Text;
-    fileUrl : Text;
-    status : Text;
-    submittedAt : Int;
-    finalPdfUrl : Text;
-    quoteNotes : Text;
+    mobile : Text;
+    pin : Text;
+    role : Text;
+    baseSalary : Float;
   };
 
-  // New actor type
-  type NewActor = {
-    typesettingQuotes : Map.Map<Nat, NewTypesettingQuoteRequest>;
+  public type NewActor = {
+    riders : Map.Map<Text, NewRider>;
+    riderActiveStatus : Map.Map<Text, Bool>;
+    // ... other actor fields
   };
 
-  // Migration function called by the main actor via the with-clause
   public func run(old : OldActor) : NewActor {
-    let newTypesettingQuotes = old.typesettingQuotes.map<Nat, OldTypesettingQuoteRequest, NewTypesettingQuoteRequest>(
-      func(_id, oldQuote) {
-        {
-          oldQuote with
-          finalPdfUrl = "";
-          quoteNotes = "";
-        };
-      }
+    let newRiders = old.riders.map<Text, OldRider, NewRider>(
+      func(_mobile, oldRider) {
+        { oldRider with baseSalary = 0.0 };
+      },
     );
-    { typesettingQuotes = newTypesettingQuotes };
+    { old with riders = newRiders };
   };
 };

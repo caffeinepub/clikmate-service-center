@@ -9,16 +9,15 @@ import Nat "mo:core/Nat";
 import Time "mo:core/Time";
 import Random "mo:core/Random";
 import List "mo:core/List";
-
-
+import Float "mo:core/Float";
 
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
+import Migration "migration";
 
-
-
+(with migration = Migration.run)
 actor {
   // Initialize the access control state
   let accessControlState = AccessControl.initState();
@@ -236,6 +235,7 @@ actor {
     mobile : Text;
     pin : Text;
     role : Text;
+    baseSalary : Float;
   };
 
   let riders = Map.empty<Text, Rider>();
@@ -303,6 +303,9 @@ actor {
 
   // Add expense entry - Admin only (financial data)
   public shared ({ caller }) func addExpense(category : Text, amount : Float, date : Text, paymentMode : Text, note : Text, addedBy : Text) : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add expenses");
+    };
     let id = nextExpenseId;
     let expense : ExpenseEntry = {
       id;
@@ -321,16 +324,25 @@ actor {
 
   // Get all expenses - Admin only (financial data)
   public query ({ caller }) func getExpenses() : async [ExpenseEntry] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view expenses");
+    };
     expenseEntries.values().toArray();
   };
 
   // Delete expense entry - Admin only (financial data)
   public shared ({ caller }) func deleteExpense(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete expenses");
+    };
     expenseEntries.remove(id);
   };
 
   // Update expense entry - Admin only (financial data)
   public shared ({ caller }) func updateExpense(id : Nat, category : Text, amount : Float, date : Text, paymentMode : Text, note : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update expenses");
+    };
     switch (expenseEntries.get(id)) {
       case (null) { Runtime.trap("Expense entry not found") };
       case (?expense) {
@@ -342,6 +354,9 @@ actor {
 
   // Add manual income entry - Admin only (financial data)
   public shared ({ caller }) func addManualIncome(category : Text, amount : Float, date : Text, paymentMode : Text, description : Text) : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add manual income");
+    };
     let id = nextIncomeId;
     let income : ManualIncomeEntry = {
       id;
@@ -359,16 +374,25 @@ actor {
 
   // Get all manual income entries - Admin only (financial data)
   public query ({ caller }) func getManualIncomes() : async [ManualIncomeEntry] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view manual income");
+    };
     manualIncomeEntries.values().toArray();
   };
 
   // Delete manual income entry - Admin only (financial data)
   public shared ({ caller }) func deleteManualIncome(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete manual income");
+    };
     manualIncomeEntries.remove(id);
   };
 
   // Update manual income entry - Admin only (financial data)
   public shared ({ caller }) func updateManualIncome(id : Nat, category : Text, amount : Float, date : Text, paymentMode : Text, description : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update manual income");
+    };
     switch (manualIncomeEntries.get(id)) {
       case (null) { Runtime.trap("Manual income entry not found") };
       case (?income) {
@@ -397,8 +421,11 @@ actor {
     id;
   };
 
-  // Get POS sales (admin/staff only)
+  // Get POS sales (admin only)
   public query ({ caller }) func getPosSales() : async [PosSale] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all POS sales");
+    };
     posSales.values().toArray();
   };
 
@@ -408,8 +435,11 @@ actor {
     posSales.values().toArray().filter(func(s) { s.customerPhone == phone });
   };
 
-  // Add/Update Khata due - Admin/Staff only
+  // Add/Update Khata due - Admin only
   public shared ({ caller }) func addKhataDue(phone : Text, customerName : Text, amount : Float) : async Float {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add Khata due");
+    };
     let oldEntry = khataLedger.get(phone);
 
     switch (oldEntry) {
@@ -435,8 +465,11 @@ actor {
     };
   };
 
-  // Clear Khata due (partial/complete) - Admin/Staff only
+  // Clear Khata due (partial/complete) - Admin only
   public shared ({ caller }) func clearKhataDue(phone : Text, amountPaid : Float) : async Float {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can clear Khata due");
+    };
 
     switch (khataLedger.get(phone)) {
       case (null) { Runtime.trap("Khata entry not found") };
@@ -464,26 +497,41 @@ actor {
     khataLedger.get(phone);
   };
 
-  // Get all Khata entries (admin/staff only)
+  // Get all Khata entries (admin only)
   public query ({ caller }) func getAllKhataEntries() : async [KhataEntry] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all Khata entries");
+    };
     khataLedger.values().toArray();
   };
 
   // User Profile Functions
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view profiles");
+    };
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own profile");
+    };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save profiles");
+    };
     userProfiles.add(caller, profile);
   };
 
   // Store Business Info - Admin only
   public shared ({ caller }) func setBusinessInfo(ownInfo : BusinessInfo) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can set business info");
+    };
     businessInfo := ?ownInfo;
   };
 
@@ -507,6 +555,9 @@ actor {
 
   // Get Inquiries - Admin only
   public query ({ caller }) func getInquiries() : async [Inquiry] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view inquiries");
+    };
     inquiries.values().toArray();
   };
 
@@ -580,6 +631,9 @@ actor {
 
   // Filter orders - Admin only
   public query ({ caller }) func filterOrders(filters : FilterOrders) : async [OrderRecord] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can filter orders");
+    };
     var filtered = orders.values().toArray();
 
     switch (filters.name) {
@@ -615,6 +669,9 @@ actor {
 
   // Update Order Status - Admin only
   public shared ({ caller }) func updateOrderStatus(id : Nat, status : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update order status");
+    };
     switch (orders.get(id)) {
       case (null) { Runtime.trap("Order not found") };
       case (?order) {
@@ -628,6 +685,9 @@ actor {
 
   // Add catalog item - Admin only
   public shared ({ caller }) func addCatalogItem(input : CatalogItemInput) : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add catalog items");
+    };
     let id = nextCatalogId;
     let item : CatalogItem = {
       id;
@@ -650,6 +710,9 @@ actor {
 
   // Update catalog item - Admin only
   public shared ({ caller }) func updateCatalogItem(id : Nat, input : CatalogItemInput) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update catalog items");
+    };
     switch (catalogItems.get(id)) {
       case (null) { Runtime.trap("Catalog item not found") };
       case (?existing) {
@@ -672,11 +735,17 @@ actor {
 
   // Delete catalog item - Admin only
   public shared ({ caller }) func deleteCatalogItem(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete catalog items");
+    };
     catalogItems.remove(id);
   };
 
   // Toggle publish status - Admin only
   public shared ({ caller }) func togglePublishCatalogItem(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can toggle publish status");
+    };
     switch (catalogItems.get(id)) {
       case (null) { Runtime.trap("Catalog item not found") };
       case (?item) {
@@ -693,6 +762,9 @@ actor {
 
   // Get all catalog items including unpublished - Admin only
   public query ({ caller }) func getAllCatalogItems() : async [CatalogItem] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all catalog items");
+    };
     catalogItems.values().toArray();
   };
 
@@ -751,6 +823,9 @@ actor {
 
   // Upload CSC final output - Admin only
   public shared ({ caller }) func uploadCscFinalOutput(orderId : Nat, file : Storage.ExternalBlob) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can upload CSC final output");
+    };
     switch (shopOrders.get(orderId)) {
       case (null) { Runtime.trap("Shop order not found") };
       case (?order) {
@@ -779,12 +854,18 @@ actor {
 
   // Get all shop orders - Admin only
   public query ({ caller }) func getAllShopOrders() : async [ShopOrder] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all shop orders");
+    };
     shopOrders.values().toArray();
   };
 
   // Update shop order status - Admin only
   // Auto-generates 4-digit OTP when status = Ready for Delivery
   public shared ({ caller }) func updateShopOrderStatus(id : Nat, status : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update shop order status");
+    };
     switch (shopOrders.get(id)) {
       case (null) { Runtime.trap("Shop order not found") };
       case (?order) {
@@ -810,7 +891,10 @@ actor {
   };
 
   // Toggle team member active status - Admin only
-  public shared func toggleTeamMemberActive(mobile : Text, isActive : Bool) : async () {
+  public shared ({ caller }) func toggleTeamMemberActive(mobile : Text, isActive : Bool) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can toggle team member status");
+    };
     riderActiveStatus.add(mobile, isActive);
   };
 
@@ -880,39 +964,182 @@ actor {
     };
   };
 
+  //  ───────────────────────────────────────────────────────────────────────
+  // STAFF / RIDER PAYROLL + ATTENDANCE SYSTEM (2024)
+  // ───────────────────────────────────────────────────────────────────────
+
+  // Payroll and Attendance Types
+  public type StaffLedgerEntry = {
+    id : Nat;
+    mobile : Text;
+    date : Text;
+    description : Text;
+    amount : Float;
+    entryType : Text;
+  };
+
+  public type AttendanceRecord = {
+    mobile : Text;
+    date : Text;
+    status : Text;
+  };
+
+  var nextStaffLedgerId = 1;
+  let staffLedger = Map.empty<Nat, StaffLedgerEntry>();
+
+  // 'mobile_date' is used as unique key
+  let attendanceRecords = Map.empty<Text, AttendanceRecord>();
+
+  func compareStaffLedgerByDate(a : StaffLedgerEntry, b : StaffLedgerEntry) : Order.Order {
+    Text.compare(a.date, b.date);
+  };
+
+  // Add attendance record - Admin only (payroll data)
+  public shared ({ caller }) func addAttendanceRecord(mobile : Text, date : Text, status : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add attendance records");
+    };
+    let record : AttendanceRecord = { mobile; date; status };
+    attendanceRecords.add(mobile # "_" # date, record);
+
+    // Mark as present or half day
+    if (status == "Present" or status == "Half-Day") {
+      let staff = riders.get(mobile);
+
+      switch (staff) {
+        case (null) {};
+        case (?s) {
+          let payAmt = s.baseSalary / 28.0;
+
+          // Pay 70% amount for half day
+          let amount = if (status == "Half-Day") {
+            payAmt * 0.7; // 30% deduction for half day
+          } else {
+            payAmt;
+          };
+
+          let ledgerEntry : StaffLedgerEntry = {
+            id = nextStaffLedgerId;
+            mobile;
+            date;
+            description = "Attendance Earned";
+            amount; // Calculate per day amount daily
+            entryType = "earned";
+          };
+
+          staffLedger.add(nextStaffLedgerId, ledgerEntry);
+          nextStaffLedgerId += 1;
+        };
+      };
+    };
+  };
+
+  // Get attendance for mobile - Admin only (payroll data)
+  public query ({ caller }) func getAttendanceForMobile(mobile : Text) : async [AttendanceRecord] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view attendance records");
+    };
+    attendanceRecords.values().toArray().filter(func(r) { r.mobile == mobile });
+  };
+
+  // Get attendance by date - Admin only (payroll data)
+  public query ({ caller }) func getAttendanceByDate(date : Text) : async [AttendanceRecord] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view attendance records");
+    };
+    attendanceRecords.values().toArray().filter(func(r) { r.date == date });
+  };
+
+  // Add staff ledger entry - Admin only (payroll data)
+  public shared ({ caller }) func addStaffLedgerEntry(mobile : Text, date : Text, description : Text, amount : Float, entryType : Text) : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add staff ledger entries");
+    };
+    let entry : StaffLedgerEntry = {
+      id = nextStaffLedgerId;
+      mobile;
+      date;
+      description;
+      amount;
+      entryType;
+    };
+    staffLedger.add(nextStaffLedgerId, entry);
+    nextStaffLedgerId += 1;
+    nextStaffLedgerId - 1;
+  };
+
+  // Get staff ledger entries - Admin only (payroll data)
+  public query ({ caller }) func getStaffLedgerEntries(mobile : Text) : async [StaffLedgerEntry] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view staff ledger entries");
+    };
+    let entries = staffLedger.values().toArray().filter(
+      func(e) { e.mobile == mobile }
+    );
+
+    entries.sort(compareStaffLedgerByDate);
+  };
+
+  // Update rider salary - Admin only (payroll data)
+  public shared ({ caller }) func updateRiderSalary(mobile : Text, baseSalary : Float) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update rider salary");
+    };
+    switch (riders.get(mobile)) {
+      case (null) { Runtime.trap("Team member not found") };
+      case (?rider) {
+        let updated = { rider with baseSalary };
+        riders.add(mobile, updated);
+      };
+    };
+  };
   // ─── Rider Management ──────────────────────────────────────────────
 
   // Add rider - Admin only
-  public shared func addRider(name : Text, mobile : Text, pin : Text) : async () {
+  public shared ({ caller }) func addRider(name : Text, mobile : Text, pin : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add riders");
+    };
     let rider : Rider = {
       name;
       mobile;
       pin;
       role = "Rider";
+      baseSalary = 0.0;
     };
     riders.add(mobile, rider);
     riderActiveStatus.add(mobile, true);
   };
 
   // Add team member with role (Rider or Staff) - Admin only
-  public shared func addTeamMember(name : Text, mobile : Text, pin : Text, role : Text) : async () {
+  public shared ({ caller }) func addTeamMember(name : Text, mobile : Text, pin : Text, role : Text, baseSalary : Float) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add team members");
+    };
     let member : Rider = {
       name;
       mobile;
       pin;
       role;
+      baseSalary;
     };
     riders.add(mobile, member);
     riderActiveStatus.add(mobile, true);
   };
 
   // Remove rider - Admin only
-  public shared func removeRider(mobile : Text) : async () {
+  public shared ({ caller }) func removeRider(mobile : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can remove riders");
+    };
     riders.remove(mobile);
   };
 
   // Reset staff PIN - Admin only
-  public shared func resetStaffPin(mobile : Text, newPin : Text) : async () {
+  public shared ({ caller }) func resetStaffPin(mobile : Text, newPin : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can reset staff PIN");
+    };
     switch (riders.get(mobile)) {
       case (null) { Runtime.trap("Team member not found") };
       case (?member) {
@@ -923,7 +1150,10 @@ actor {
   };
 
   // Get all riders - Admin only
-  public query func getRiders() : async [Rider] {
+  public query ({ caller }) func getRiders() : async [Rider] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view riders");
+    };
     riders.values().toArray();
   };
 
@@ -967,6 +1197,9 @@ actor {
 
   // Set UPI Settings - Admin only
   public shared ({ caller }) func setUpiSettings(upiId : Text, qrCodeUrl : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can set UPI settings");
+    };
     upiSettings := ?{ upiId; qrCodeUrl };
   };
 
@@ -1010,6 +1243,9 @@ actor {
 
   // Admin recharge wallet - Admin only
   public shared ({ caller }) func rechargeWallet(phone : Text, amount : Float) : async Float {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can recharge wallet");
+    };
     let oldBalance = switch (walletBalances.get(phone)) {
       case (?balance) { balance };
       case (null) { 0.0 };
@@ -1021,6 +1257,9 @@ actor {
 
   // Admin deduct wallet - Admin only
   public shared ({ caller }) func deductWallet(phone : Text, amount : Float) : async Float {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can deduct wallet");
+    };
     let oldBalance = switch (walletBalances.get(phone)) {
       case (?balance) { balance };
       case (null) { Runtime.trap("Insufficient funds") };
@@ -1106,6 +1345,9 @@ actor {
 
   // Update typesetting quote status - Admin only
   public shared ({ caller }) func updateTypesettingQuoteStatus(id : Nat, update : TypesettingQuoteUpdate) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update typesetting quote status");
+    };
     switch (typesettingQuotes.get(id)) {
       case (null) { Runtime.trap("Quote not found") };
       case (?quote) {
@@ -1117,6 +1359,9 @@ actor {
 
   // Get all typesetting quotes - Admin only
   public query ({ caller }) func getAllTypesettingQuotes() : async [TypesettingQuoteRequest] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all typesetting quotes");
+    };
     typesettingQuotes.values().toArray();
   };
 
@@ -1177,11 +1422,17 @@ actor {
 
   // Get all reviews - Admin only
   public query ({ caller }) func getAllReviews() : async [Review] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all reviews");
+    };
     reviews.values().toArray();
   };
 
   // Toggle review published status - Admin only
   public shared ({ caller }) func toggleReviewPublished(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can toggle review published status");
+    };
     switch (reviews.get(id)) {
       case (null) { Runtime.trap("Review not found") };
       case (?r) {
@@ -1192,11 +1443,17 @@ actor {
 
   // Delete review - Admin only
   public shared ({ caller }) func deleteReview(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete reviews");
+    };
     reviews.remove(id);
   };
 
   // Seed 25 realistic reviews (idempotent - runs only once) - Admin only
   public shared ({ caller }) func seedReviews() : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can seed reviews");
+    };
     if (reviewsSeeded) { return };
     reviewsSeeded := true;
 
@@ -1281,6 +1538,9 @@ actor {
   // The frontend must verify bulk staff via verifyBulkStaff before calling this.
   // Backend enforces admin-only to prevent unauthorized access.
   public shared ({ caller }) func updateLeadFinalPdf(id : Nat, finalPdfUrl : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update lead final PDF");
+    };
     switch (typesettingQuotes.get(id)) {
       case (null) { Runtime.trap("Lead not found") };
       case (?lead) {
@@ -1295,6 +1555,9 @@ actor {
   // The frontend must verify bulk staff via verifyBulkStaff before calling this.
   // Backend enforces admin-only to prevent unauthorized access.
   public shared ({ caller }) func updateLeadQuoteNotes(id : Nat, notes : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update lead quote notes");
+    };
     switch (typesettingQuotes.get(id)) {
       case (null) { Runtime.trap("Lead not found") };
       case (?lead) {
@@ -1306,6 +1569,9 @@ actor {
 
   // Export all leads as CSV (Admin only)
   public query ({ caller }) func exportBulkLeadsToCsv() : async Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can export bulk leads");
+    };
 
     let header = "Phone,Customer Name,Company,Contact Person,Address,GST No,Requirements,Submitted\n";
 
@@ -1324,6 +1590,9 @@ actor {
 
   // Import leads from CSV (Admin only)
   public shared ({ caller }) func importBulkLeadsFromCsv(csv : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can import bulk leads");
+    };
 
     let lines = List.empty<Text>();
     var currentLine = "";
@@ -1388,6 +1657,59 @@ actor {
       let slice = linesArray.sliceToArray(1, linesArray.size());
       for (l in slice.values()) {
         processLeadLine(l);
+      };
+    };
+  };
+
+
+  // ── Support Tickets ───────────────────────────────────────────────────────
+
+  type SupportTicket = {
+    id : Nat;
+    orderId : Text;
+    customerMobile : Text;
+    complaint : Text;
+    createdAt : Int;
+    resolved : Bool;
+  };
+
+  let supportTickets = Map.empty<Nat, SupportTicket>();
+  var nextSupportTicketId : Nat = 0;
+
+  public shared ({ caller }) func submitSupportTicket(orderId : Text, customerMobile : Text, complaint : Text) : async Nat {
+    let ticket : SupportTicket = {
+      id = nextSupportTicketId;
+      orderId = orderId;
+      customerMobile = customerMobile;
+      complaint = complaint;
+      createdAt = Time.now();
+      resolved = false;
+    };
+    supportTickets.add(nextSupportTicketId, ticket);
+    nextSupportTicketId += 1;
+    nextSupportTicketId - 1
+  };
+
+  public query ({ caller }) func getSupportTickets(customerMobile : Text) : async [SupportTicket] {
+    supportTickets.values().toArray().filter(func(t) { t.customerMobile == customerMobile })
+  };
+
+  public query ({ caller }) func getAllSupportTickets() : async [SupportTicket] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all support tickets");
+    };
+    supportTickets.values().toArray()
+  };
+
+  public shared ({ caller }) func resolveSupportTicket(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can resolve support tickets");
+    };
+    switch (supportTickets.get(id)) {
+      case (null) { Runtime.trap("Ticket not found") };
+      case (?ticket) {
+        let updated = { ticket with resolved = true };
+        supportTickets.add(id, updated);
       };
     };
   };

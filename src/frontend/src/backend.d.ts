@@ -14,15 +14,86 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
-export interface UserProfile {
-    customerName?: string;
-    deliveryAddress?: string;
-    name: string;
-    phone: string;
+export interface TypesettingQuoteUpdate {
+    status: string;
 }
-export interface UpiSettings {
-    upiId: string;
-    qrCodeUrl: string;
+export interface PosSale {
+    id: bigint;
+    paymentMethod: string;
+    customerPhone: string;
+    staffMobile: string;
+    createdAt: bigint;
+    totalAmount: number;
+    items: Array<PosSaleItem>;
+}
+export interface ShopOrderItem {
+    qty: bigint;
+    itemId: bigint;
+    itemName: string;
+    price: number;
+}
+export interface CatalogItem {
+    id: bigint;
+    requiredDocuments: string;
+    stockStatus: string;
+    requiresPdfCalc: boolean;
+    published: boolean;
+    name: string;
+    createdAt: bigint;
+    description: string;
+    category: string;
+    price: string;
+    mediaFiles: Array<ExternalBlob>;
+    mediaTypes: Array<string>;
+}
+export interface ExpenseEntry {
+    id: bigint;
+    date: string;
+    note: string;
+    createdAt: bigint;
+    addedBy: string;
+    paymentMode: string;
+    category: string;
+    amount: number;
+}
+export interface Review {
+    id: bigint;
+    customerName: string;
+    deliveryRating?: bigint;
+    customerPhone: string;
+    serviceRating: bigint;
+    published: boolean;
+    createdAt: bigint;
+    orderId: bigint;
+    location: string;
+    deliveryComment?: string;
+    serviceComment: string;
+}
+export interface ManualIncomeEntry {
+    id: bigint;
+    date: string;
+    createdAt: bigint;
+    description: string;
+    paymentMode: string;
+    category: string;
+    amount: number;
+}
+export interface CatalogItemInput {
+    requiredDocuments: string;
+    stockStatus: string;
+    requiresPdfCalc: boolean;
+    name: string;
+    description: string;
+    category: string;
+    price: string;
+    mediaFiles: Array<ExternalBlob>;
+    mediaTypes: Array<string>;
+}
+export interface KhataEntry {
+    customerName: string;
+    lastUpdated: bigint;
+    totalDue: number;
+    phone: string;
 }
 export interface MaskedShopOrder {
     id: bigint;
@@ -52,14 +123,13 @@ export interface ShopOrder {
     phone: string;
     items: Array<ShopOrderItem>;
 }
-export interface ManualIncomeEntry {
+export interface SupportTicket {
     id: bigint;
-    date: string;
+    resolved: boolean;
     createdAt: bigint;
-    description: string;
-    paymentMode: string;
-    category: string;
-    amount: number;
+    complaint: string;
+    customerMobile: string;
+    orderId: string;
 }
 export interface OrderRecord {
     id: bigint;
@@ -72,20 +142,25 @@ export interface OrderRecord {
     phone: string;
     fileUrl: string;
 }
-export interface KhataEntry {
-    customerName: string;
-    lastUpdated: bigint;
-    totalDue: number;
-    phone: string;
-}
-export interface TypesettingQuoteUpdate {
+export interface AttendanceRecord {
     status: string;
+    date: string;
+    mobile: string;
+}
+export interface StaffLedgerEntry {
+    id: bigint;
+    entryType: string;
+    date: string;
+    description: string;
+    mobile: string;
+    amount: number;
 }
 export interface Rider {
     pin: string;
     name: string;
     role: string;
     mobile: string;
+    baseSalary: number;
 }
 export interface PosSaleItem {
     qty: bigint;
@@ -114,26 +189,6 @@ export interface ServiceOrder {
     instructions: string;
     phone: string;
 }
-export interface PosSale {
-    id: bigint;
-    paymentMethod: string;
-    customerPhone: string;
-    staffMobile: string;
-    createdAt: bigint;
-    totalAmount: number;
-    items: Array<PosSaleItem>;
-}
-export interface CatalogItemInput {
-    requiredDocuments: string;
-    stockStatus: string;
-    requiresPdfCalc: boolean;
-    name: string;
-    description: string;
-    category: string;
-    price: string;
-    mediaFiles: Array<ExternalBlob>;
-    mediaTypes: Array<string>;
-}
 export interface TypesettingQuoteRequest {
     id: bigint;
     status: string;
@@ -147,20 +202,6 @@ export interface TypesettingQuoteRequest {
     format: string;
     fileUrl: string;
 }
-export interface CatalogItem {
-    id: bigint;
-    requiredDocuments: string;
-    stockStatus: string;
-    requiresPdfCalc: boolean;
-    published: boolean;
-    name: string;
-    createdAt: bigint;
-    description: string;
-    category: string;
-    price: string;
-    mediaFiles: Array<ExternalBlob>;
-    mediaTypes: Array<string>;
-}
 export interface BusinessInfo {
     hours: string;
     name: string;
@@ -168,39 +209,20 @@ export interface BusinessInfo {
     address: string;
     phone: string;
 }
-export interface ShopOrderItem {
-    qty: bigint;
-    itemId: bigint;
-    itemName: string;
-    price: number;
-}
 export interface Inquiry {
     name: string;
     message: string;
     phone: string;
 }
-export interface ExpenseEntry {
-    id: bigint;
-    date: string;
-    note: string;
-    createdAt: bigint;
-    addedBy: string;
-    paymentMode: string;
-    category: string;
-    amount: number;
+export interface UserProfile {
+    customerName?: string;
+    deliveryAddress?: string;
+    name: string;
+    phone: string;
 }
-export interface Review {
-    id: bigint;
-    customerName: string;
-    deliveryRating?: bigint;
-    customerPhone: string;
-    serviceRating: bigint;
-    published: boolean;
-    createdAt: bigint;
-    orderId: bigint;
-    location: string;
-    deliveryComment?: string;
-    serviceComment: string;
+export interface UpiSettings {
+    upiId: string;
+    qrCodeUrl: string;
 }
 export enum UserRole {
     admin = "admin",
@@ -208,12 +230,15 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
+    acceptDelivery(orderId: bigint): Promise<void>;
+    addAttendanceRecord(mobile: string, date: string, status: string): Promise<void>;
     addCatalogItem(input: CatalogItemInput): Promise<bigint>;
     addExpense(category: string, amount: number, date: string, paymentMode: string, note: string, addedBy: string): Promise<bigint>;
     addKhataDue(phone: string, customerName: string, amount: number): Promise<number>;
     addManualIncome(category: string, amount: number, date: string, paymentMode: string, description: string): Promise<bigint>;
     addRider(name: string, mobile: string, pin: string): Promise<void>;
-    addTeamMember(name: string, mobile: string, pin: string, role: string): Promise<void>;
+    addStaffLedgerEntry(mobile: string, date: string, description: string, amount: number, entryType: string): Promise<bigint>;
+    addTeamMember(name: string, mobile: string, pin: string, role: string, baseSalary: number): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     claimAdminWithMasterKey(key: string): Promise<boolean>;
     clearKhataDue(phone: string, amountPaid: number): Promise<number>;
@@ -229,7 +254,11 @@ export interface backendInterface {
     getAllCatalogItems(): Promise<Array<CatalogItem>>;
     getAllKhataEntries(): Promise<Array<KhataEntry>>;
     getAllReviews(): Promise<Array<Review>>;
+    getAllShopOrders(): Promise<Array<ShopOrder>>;
+    getAllSupportTickets(): Promise<Array<SupportTicket>>;
     getAllTypesettingQuotes(): Promise<Array<TypesettingQuoteRequest>>;
+    getAttendanceByDate(date: string): Promise<Array<AttendanceRecord>>;
+    getAttendanceForMobile(mobile: string): Promise<Array<AttendanceRecord>>;
     getBusinessInfo(): Promise<BusinessInfo>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
@@ -242,6 +271,7 @@ export interface backendInterface {
     getInquiries(): Promise<Array<Inquiry>>;
     getKhataEntry(phone: string): Promise<KhataEntry | null>;
     getManualIncomes(): Promise<Array<ManualIncomeEntry>>;
+    getOrderDeliveryOtp(orderId: bigint, phone: string): Promise<string>;
     getOrdersByPhone(phone: string): Promise<Array<OrderRecord>>;
     getPosSales(): Promise<Array<PosSale>>;
     getPosSalesByPhone(phone: string): Promise<Array<PosSale>>;
@@ -249,24 +279,22 @@ export interface backendInterface {
     getPublishedReviews(): Promise<Array<Review>>;
     getReadyForDeliveryOrders(): Promise<Array<MaskedShopOrder>>;
     getRiders(): Promise<Array<Rider>>;
+    getStaffLedgerEntries(mobile: string): Promise<Array<StaffLedgerEntry>>;
+    getSupportTickets(customerMobile: string): Promise<Array<SupportTicket>>;
+    getTeamMemberActive(mobile: string): Promise<boolean>;
     getUpiSettings(): Promise<UpiSettings | null>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getWalletBalance(phone: string): Promise<number>;
     importBulkLeadsFromCsv(csv: string): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
-    acceptDelivery(orderId: bigint): Promise<void>;
-    getAllShopOrders(): Promise<Array<ShopOrder>>;
-    getOrderDeliveryOtp(orderId: bigint, phone: string): Promise<string>;
-    getTeamMemberActive(mobile: string): Promise<boolean>;
     markOrderDelivered(orderId: bigint, otp: string): Promise<ShopOrder>;
-    toggleTeamMemberActive(mobile: string, isActive: boolean): Promise<void>;
-    updateShopOrderStatus(id: bigint, status: string): Promise<void>;
     placeCscShopOrder(phone: string, customerName: string, deliveryMethod: string, deliveryAddress: string, paymentMethod: string, items: Array<ShopOrderItem>, totalAmount: number, cscDocuments: Array<ExternalBlob>, cscSpecialDetails: string): Promise<ShopOrder>;
     placeShopOrder(phone: string, customerName: string, deliveryMethod: string, deliveryAddress: string, paymentMethod: string, items: Array<ShopOrderItem>, totalAmount: number): Promise<ShopOrder>;
     rechargeWallet(phone: string, amount: number): Promise<number>;
     recordPosSale(items: Array<PosSaleItem>, totalAmount: number, paymentMethod: string, customerPhone: string, staffMobile: string): Promise<bigint>;
     removeRider(mobile: string): Promise<void>;
     resetStaffPin(mobile: string, newPin: string): Promise<void>;
+    resolveSupportTicket(id: bigint): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     saveCustomerProfile(phone: string, customerName: string, deliveryAddress: string): Promise<void>;
     seedReviews(): Promise<void>;
@@ -276,15 +304,19 @@ export interface backendInterface {
     submitOrder(name: string, phone: string, serviceType: string, instructions: string, fileUrl: string): Promise<bigint>;
     submitOrderFull(input: ServiceOrder): Promise<bigint>;
     submitReview(orderId: bigint, customerName: string, customerPhone: string, location: string, serviceRating: bigint, serviceComment: string, deliveryRating: bigint | null, deliveryComment: string | null): Promise<bigint>;
+    submitSupportTicket(orderId: string, customerMobile: string, complaint: string): Promise<bigint>;
     submitTypesettingQuoteRequest(input: TypesettingQuoteRequestInput): Promise<bigint>;
     togglePublishCatalogItem(id: bigint): Promise<void>;
     toggleReviewPublished(id: bigint): Promise<void>;
+    toggleTeamMemberActive(mobile: string, isActive: boolean): Promise<void>;
     updateCatalogItem(id: bigint, input: CatalogItemInput): Promise<void>;
     updateExpense(id: bigint, category: string, amount: number, date: string, paymentMode: string, note: string): Promise<void>;
     updateLeadFinalPdf(id: bigint, finalPdfUrl: string): Promise<void>;
     updateLeadQuoteNotes(id: bigint, notes: string): Promise<void>;
     updateManualIncome(id: bigint, category: string, amount: number, date: string, paymentMode: string, description: string): Promise<void>;
     updateOrderStatus(id: bigint, status: string): Promise<void>;
+    updateRiderSalary(mobile: string, baseSalary: number): Promise<void>;
+    updateShopOrderStatus(id: bigint, status: string): Promise<void>;
     updateTypesettingQuoteStatus(id: bigint, update: TypesettingQuoteUpdate): Promise<void>;
     uploadCscFinalOutput(orderId: bigint, file: ExternalBlob): Promise<void>;
     verifyBulkStaff(mobile: string, pin: string): Promise<boolean>;

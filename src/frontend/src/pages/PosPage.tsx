@@ -95,13 +95,21 @@ export default function PosPage() {
 
   // Session guard
   const session = localStorage.getItem("staffSession");
+  const adminSession = localStorage.getItem("clikmate_admin_session");
+  const isAdminBypass = adminSession === "1";
   useEffect(() => {
-    if (!session) navigate("/pos-login");
-  }, [navigate, session]);
-  if (!session) return null;
-  const staffData = JSON.parse(session) as { mobile: string; name?: string };
+    if (!session && !isAdminBypass) navigate("/pos-login");
+  }, [navigate, session, isAdminBypass]);
+  if (!session && !isAdminBypass) return null;
+  const staffData = isAdminBypass
+    ? { mobile: "admin", name: "Super Admin" }
+    : (JSON.parse(session!) as { mobile: string; name?: string });
 
   function handleLogout() {
+    if (isAdminBypass) {
+      navigate("/admin");
+      return;
+    }
     localStorage.removeItem("staffSession");
     navigate("/pos-login");
   }
@@ -768,19 +776,7 @@ function CatalogPanel({
                           type="button"
                           data-ocid={`pos.catalog.list.add_button.${idx + 1}`}
                           onClick={() => {
-                            if (item.requiresPdfCalc) {
-                              handleItemClick(item);
-                            } else {
-                              const q = rowQty[itemKey] ?? 1;
-                              dispatchAddToCart({
-                                id: item.id.toString(),
-                                name: item.name,
-                                qty: q,
-                                total: rateNum * q,
-                                unitPrice: rateNum,
-                              });
-                              setRowQty((prev) => ({ ...prev, [itemKey]: 1 }));
-                            }
+                            handleItemClick(item);
                           }}
                           style={{
                             padding: "3px 10px",
@@ -845,41 +841,36 @@ function ProductModal({
 }) {
   const baseRate = parseRate(item.price);
   const [qty, setQty] = useState(1);
-  const total = qty * baseRate;
+  const [price, setPrice] = useState(baseRate);
+  const total = qty * price;
 
   return (
     <PosModal onClose={onClose} title={item.name}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <InfoRow label="Unit Price" value={formatRs(baseRate)} />
+        <div>
+          <p style={lblStyle}>Rate / Unit Price (editable)</p>
+          <input
+            data-ocid="pos.product.price.input"
+            type="number"
+            min="0"
+            step="0.5"
+            value={price}
+            onChange={(e) => setPrice(Number.parseFloat(e.target.value) || 0)}
+            style={posInput}
+          />
+        </div>
         <div>
           <p style={lblStyle}>Quantity</p>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button
-              type="button"
-              onClick={() => setQty((q) => Math.max(1, q - 1))}
-              style={qtyBtn}
-            >
-              <Minus size={14} />
-            </button>
-            <span
-              style={{
-                color: "white",
-                fontSize: 18,
-                fontWeight: 700,
-                minWidth: 32,
-                textAlign: "center",
-              }}
-            >
-              {qty}
-            </span>
-            <button
-              type="button"
-              onClick={() => setQty((q) => q + 1)}
-              style={qtyBtn}
-            >
-              <Plus size={14} />
-            </button>
-          </div>
+          <input
+            data-ocid="pos.product.qty.input"
+            type="number"
+            min="1"
+            value={qty}
+            onChange={(e) =>
+              setQty(Math.max(1, Number.parseInt(e.target.value) || 1))
+            }
+            style={posInput}
+          />
         </div>
         <div
           style={{
@@ -904,7 +895,7 @@ function ProductModal({
               id: `${item.id}-${Date.now()}`,
               name: item.name,
               qty,
-              unitPrice: baseRate,
+              unitPrice: price,
               total,
             });
             onClose();
@@ -950,7 +941,17 @@ function ServiceModal({
         </div>
         <div>
           <p style={lblStyle}>Quantity</p>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              data-ocid="pos.service.qty.input"
+              type="number"
+              min="1"
+              value={qty}
+              onChange={(e) =>
+                setQty(Math.max(1, Number.parseInt(e.target.value) || 1))
+              }
+              style={{ ...posInput, flex: 1 }}
+            />
             <button
               type="button"
               onClick={() => setQty((q) => Math.max(1, q - 1))}
@@ -958,17 +959,6 @@ function ServiceModal({
             >
               <Minus size={14} />
             </button>
-            <span
-              style={{
-                color: "white",
-                fontSize: 18,
-                fontWeight: 700,
-                minWidth: 32,
-                textAlign: "center",
-              }}
-            >
-              {qty}
-            </span>
             <button
               type="button"
               onClick={() => setQty((q) => q + 1)}
@@ -1970,6 +1960,7 @@ function AccountsPanel({
   const [clearPhone, setClearPhone] = useState("");
   const [clearAmount, setClearAmount] = useState("");
   const [saving, setSaving] = useState(false);
+  const [tallyFilter, setTallyFilter] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!actor) return;
@@ -2149,33 +2140,223 @@ function AccountsPanel({
                 color: "#f59e0b",
                 wide: true,
               },
-            ].map((t) => (
-              <div
-                key={t.label}
-                data-ocid={`pos.tally.${t.label.toLowerCase().replace(/\/| /g, "_")}.card`}
-                style={{
-                  background: `${t.color}15`,
-                  border: `1px solid ${t.color}30`,
-                  borderRadius: 8,
-                  padding: "8px 10px",
-                  gridColumn: (t as any).wide ? "1/-1" : undefined,
-                }}
-              >
-                <p
+            ].map((t) => {
+              const isActive = tallyFilter === t.label;
+              return (
+                <button
+                  type="button"
+                  key={t.label}
+                  data-ocid={`pos.tally.${t.label.toLowerCase().replace(/\/| /g, "_")}.card`}
+                  onClick={() => setTallyFilter(isActive ? null : t.label)}
                   style={{
-                    color: "rgba(255,255,255,0.5)",
-                    fontSize: 10,
-                    marginBottom: 2,
+                    background: isActive ? `${t.color}30` : `${t.color}15`,
+                    border: `2px solid ${isActive ? t.color : `${t.color}30`}`,
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    gridColumn: (t as any).wide ? "1/-1" : undefined,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                    textAlign: "left",
                   }}
                 >
-                  {t.label}
-                </p>
-                <p style={{ color: t.color, fontWeight: 800, fontSize: 16 }}>
-                  {formatRs(t.value)}
-                </p>
-              </div>
-            ))}
+                  <p
+                    style={{
+                      color: "rgba(255,255,255,0.5)",
+                      fontSize: 10,
+                      marginBottom: 2,
+                    }}
+                  >
+                    {t.label} {isActive ? "✓" : ""}
+                  </p>
+                  <p style={{ color: t.color, fontWeight: 800, fontSize: 16 }}>
+                    {formatRs(t.value)}
+                  </p>
+                </button>
+              );
+            })}
           </div>
+        )}
+      </div>
+
+      {/* Filtered Transactions Table */}
+      <div
+        className="print-area"
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 12,
+          padding: 14,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 12,
+          }}
+        >
+          <h3
+            style={{
+              color: "white",
+              fontWeight: 700,
+              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              margin: 0,
+            }}
+          >
+            <span style={{ fontSize: 14 }}>📊</span>
+            {tallyFilter
+              ? `Transactions: ${tallyFilter}`
+              : "Filtered Transactions"}
+          </h3>
+          {tallyFilter && (
+            <button
+              type="button"
+              data-ocid="pos.tally.print.button"
+              onClick={() => window.print()}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 7,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.06)",
+                color: "white",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              🖨️ Print A4
+            </button>
+          )}
+        </div>
+        {!tallyFilter ? (
+          <p
+            style={{
+              color: "rgba(255,255,255,0.35)",
+              fontSize: 12,
+              textAlign: "center",
+              padding: "16px 0",
+            }}
+          >
+            Click a card above to filter transactions
+          </p>
+        ) : (
+          (() => {
+            const filtered =
+              tallyFilter === "Net Sales"
+                ? todaySales
+                : todaySales.filter(
+                    (s) =>
+                      s.paymentMethod ===
+                      (tallyFilter === "Khata/Due" ? "Khata" : tallyFilter),
+                  );
+            if (filtered.length === 0) {
+              return (
+                <p
+                  style={{
+                    color: "rgba(255,255,255,0.35)",
+                    fontSize: 12,
+                    textAlign: "center",
+                    padding: "16px 0",
+                  }}
+                >
+                  No transactions found
+                </p>
+              );
+            }
+            return (
+              <div style={{ overflowX: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 12,
+                  }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        borderBottom: "1px solid rgba(255,255,255,0.1)",
+                      }}
+                    >
+                      {["Time", "Note / Customer", "Amount (₹)", "Mode"].map(
+                        (h) => (
+                          <th
+                            key={h}
+                            style={{
+                              padding: "5px 8px",
+                              color: "rgba(255,255,255,0.5)",
+                              textAlign: "left",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {h}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((s, i) => {
+                      const d = new Date(Number(s.createdAt) / 1_000_000);
+                      return (
+                        <tr
+                          key={String(s.id)}
+                          style={{
+                            borderBottom: "1px solid rgba(255,255,255,0.05)",
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "5px 8px",
+                              color: "rgba(255,255,255,0.7)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {d.toLocaleTimeString("en-IN", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td
+                            style={{
+                              padding: "5px 8px",
+                              color: "rgba(255,255,255,0.7)",
+                            }}
+                          >
+                            {s.customerPhone || `Sale #${i + 1}`}
+                          </td>
+                          <td
+                            style={{
+                              padding: "5px 8px",
+                              color: "#f59e0b",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {formatRs(s.totalAmount)}
+                          </td>
+                          <td
+                            style={{
+                              padding: "5px 8px",
+                              color: "rgba(255,255,255,0.7)",
+                            }}
+                          >
+                            {s.paymentMethod}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()
         )}
       </div>
 
@@ -2540,7 +2721,7 @@ function PosModal({
 }
 
 // ─── Shared sub-components & styles ──────────────────────────────────────────
-function InfoRow({ label, value }: { label: string; value: string }) {
+function _InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between" }}>
       <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>

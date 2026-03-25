@@ -80,3 +80,45 @@
     background-color: oklch(0.97 0.003 240);
   }
 }
+
+/* ─── Print Styles ─────────────────────────────────────────────────────────── */
+@media print {
+  nav,
+  header,
+  .no-print,
+  .pos-left-panel,
+  .pos-billing-panel {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .print-area {
+    display: block !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  th,
+  td {
+    border: 1px solid #ccc;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  h1,
+  h2,
+  h3 {
+    color: black !important;
+  }
+  .admin-sidebar-nav {
+    display: none !important;
+  }
+}
+.print-only {
+  display: none;
+}
